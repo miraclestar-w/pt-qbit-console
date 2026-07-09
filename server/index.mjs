@@ -1,0 +1,487 @@
+import express from "express";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const app = express();
+
+function loadDotEnv() {
+  const envPath = path.resolve(__dirname, "../.env");
+  if (!fs.existsSync(envPath)) return;
+  const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+    const [key, ...valueParts] = trimmed.split("=");
+    if (process.env[key]) continue;
+    const value = valueParts.join("=").trim().replace(/^['"]|['"]$/g, "");
+    process.env[key] = value;
+  }
+}
+
+loadDotEnv();
+
+const port = Number(process.env.PORT || 8787);
+const qbitUrls = [...new Set([
+  (process.env.QBIT_URL || "http://192.168.1.27:8085").replace(/\/+$/, ""),
+  (process.env.QBIT_URL_EXT || "https://qbittorrent.miraclestar.fnos.net").replace(/\/+$/, "")
+].filter(Boolean))];
+const qbitUsername = process.env.QBIT_USERNAME || "admin";
+const qbitPassword = process.env.QBIT_PASSWORD || "admin";
+
+app.use(express.json({ limit: "2mb" }));
+
+class QbitError extends Error {
+  constructor(message, status = 500, details = undefined) {
+    super(message);
+    this.status = status;
+    this.details = details;
+  }
+}
+
+class QbitClient {
+  constructor(urls, username, password) {
+    this.urls = urls;
+    this.baseUrl = urls[0];
+    this.username = username;
+    this.password = password;
+    this.sid = "";
+    this.lastLoginAt = 0;
+    this.loginPromise = null;
+  }
+
+  async login() {
+    const body = new URLSearchParams({
+      username: this.username,
+      password: this.password
+    });
+    const response = await this.rawFetch("/api/v2/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: `${this.baseUrl}/`
+      },
+      body
+    });
+    const text = await response.text();
+    if (!response.ok || !text.includes("Ok.")) {
+      throw new QbitError("qBittorrent 登录失败，请检查地址、账号或密码", response.status || 502, text);
+    }
+    const cookie = response.headers.get("set-cookie") || "";
+    const sid = cookie.match(/SID=([^;]+)/)?.[1];
+    if (!sid) {
+      throw new QbitError("qBittorrent 登录成功但没有返回 SID Cookie", 502);
+    }
+    this.sid = sid;
+    this.lastLoginAt = Date.now();
+  }
+
+  async rawFetch(apiPath, options = {}) {
+    const timeout = Number(process.env.QBIT_TIMEOUT_MS || 8000);
+    const candidates = [this.baseUrl, ...this.urls.filter((url) => url !== this.baseUrl)];
+    let lastError;
+    for (const baseUrl of candidates) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(`${baseUrl}${apiPath}`, {
+          ...options,
+          signal: controller.signal
+        });
+        if (response.ok || (response.status >= 400 && response.status < 500)) {
+          if (baseUrl !== this.baseUrl) {
+            this.baseUrl = baseUrl;
+            this.sid = "";
+            console.log(`[qbit] switched to ${baseUrl}`);
+          }
+          return response;
+        }
+        lastError = new QbitError(`qBittorrent responded ${response.status}`, response.status);
+      } catch (error) {
+        lastError = error?.name === "AbortError"
+          ? new QbitError(`连接超时：${baseUrl}`, 504)
+          : new QbitError(`无法连接：${error?.message || String(error)}`, 502);
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastError || new QbitError("所有 qBittorrent 地址均不可达", 502);
+  }
+
+  async ensureLogin() {
+    if (this.sid && Date.now() - this.lastLoginAt <= 20 * 60 * 1000) return;
+    if (!this.loginPromise) {
+      this.loginPromise = this.login().finally(() => {
+        this.loginPromise = null;
+      });
+    }
+    await this.loginPromise;
+  }
+
+  async request(apiPath, options = {}, retry = true) {
+    await this.ensureLogin();
+    const headers = {
+      Referer: `${this.baseUrl}/`,
+      Cookie: `SID=${this.sid}`,
+      ...(options.headers || {})
+    };
+    const response = await this.rawFetch(apiPath, {
+      ...options,
+      headers
+    });
+    if ((response.status === 401 || response.status === 403) && retry) {
+      this.sid = "";
+      await this.ensureLogin();
+      return this.request(apiPath, options, false);
+    }
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new QbitError(`qBittorrent API 请求失败：${apiPath}`, response.status, text);
+    }
+    return response;
+  }
+
+  async json(apiPath) {
+    const response = await this.request(apiPath);
+    return response.json();
+  }
+
+  async text(apiPath, options = {}) {
+    const response = await this.request(apiPath, options);
+    return response.text();
+  }
+
+  async postForm(apiPath, fields = {}) {
+    const body = new URLSearchParams();
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        body.set(key, String(value));
+      }
+    });
+    return this.text(apiPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
+    });
+  }
+
+  async postMultipart(apiPath, fields = {}) {
+    const body = new FormData();
+    Object.entries(fields).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        body.append(key, String(value));
+      }
+    });
+    return this.text(apiPath, {
+      method: "POST",
+      body
+    });
+  }
+}
+
+const qbit = new QbitClient(qbitUrls, qbitUsername, qbitPassword);
+const trafficBaselinePath = path.resolve(__dirname, "../.mimocode/traffic-baseline.json");
+const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.TZ || "Asia/Shanghai" });
+const appInfoTtlMs = Math.max(60_000, Number(process.env.APP_INFO_TTL_MS || 60 * 60 * 1000));
+let appInfoCache = null;
+let dashboardServerState = {};
+let dashboardInitialized = false;
+
+function todayKey() {
+  return dayFormatter.format(new Date());
+}
+
+function readTrafficBaseline() {
+  try {
+    if (!fs.existsSync(trafficBaselinePath)) return null;
+    return JSON.parse(fs.readFileSync(trafficBaselinePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeTrafficBaseline(baseline) {
+  fs.mkdirSync(path.dirname(trafficBaselinePath), { recursive: true });
+  fs.writeFileSync(trafficBaselinePath, JSON.stringify(baseline, null, 2));
+}
+
+let trafficBaseline = readTrafficBaseline();
+
+function numberOrZero(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function getDailyStats(transfer, serverState = {}) {
+  const key = todayKey();
+  const alltimeDl = numberOrZero(serverState.alltime_dl ?? transfer.alltime_dl);
+  const alltimeUl = numberOrZero(serverState.alltime_ul ?? transfer.alltime_ul);
+  const sessionDl = numberOrZero(transfer.dl_info_data);
+  const sessionUl = numberOrZero(transfer.up_info_data);
+  if (!trafficBaseline || trafficBaseline.date !== key || trafficBaseline.dl > alltimeDl || trafficBaseline.ul > alltimeUl) {
+    trafficBaseline = {
+      date: key,
+      dl: Math.max(0, alltimeDl - sessionDl),
+      ul: Math.max(0, alltimeUl - sessionUl)
+    };
+    writeTrafficBaseline(trafficBaseline);
+  }
+
+  return {
+    date: key,
+    downloaded: Math.max(0, alltimeDl - numberOrZero(trafficBaseline.dl)),
+    uploaded: Math.max(0, alltimeUl - numberOrZero(trafficBaseline.ul))
+  };
+}
+
+function buildQuery(query) {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "" && value !== "all") {
+      params.set(key, String(value));
+    }
+  });
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+function hashField(hashes) {
+  if (hashes === "all") return "all";
+  const values = (Array.isArray(hashes) ? hashes : [hashes])
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (!values.length) throw new QbitError("请至少选择一个种子", 400);
+  if (values.length > 2000) throw new QbitError("单次最多操作 2000 个种子", 400);
+  if (values.some((value) => !/^[0-9a-f]{40,64}$/.test(value))) {
+    throw new QbitError("种子 Hash 格式无效", 400);
+  }
+  return values.join("|");
+}
+
+async function getAppInfo() {
+  if (appInfoCache && appInfoCache.baseUrl === qbit.baseUrl && Date.now() - appInfoCache.cachedAt < appInfoTtlMs) {
+    return appInfoCache;
+  }
+  const [version, apiVersion] = await Promise.all([
+    qbit.text("/api/v2/app/version"),
+    qbit.text("/api/v2/app/webapiVersion")
+  ]);
+  appInfoCache = { version, apiVersion, baseUrl: qbit.baseUrl, cachedAt: Date.now() };
+  return appInfoCache;
+}
+
+function requestedRid(value) {
+  const rid = Number(value);
+  return Number.isSafeInteger(rid) && rid >= 0 ? rid : 0;
+}
+
+async function withActionFallback(primary, fallback) {
+  try {
+    return await primary();
+  } catch (error) {
+    if (fallback && [404, 405].includes(error.status)) {
+      return fallback();
+    }
+    throw error;
+  }
+}
+
+app.get("/api/config", (_request, response) => {
+  response.json({
+    qbitUrl: qbit.baseUrl,
+    user: qbitUsername
+  });
+});
+
+app.get("/api/health", async (_request, response, next) => {
+  try {
+    const [appInfo, transfer, syncData] = await Promise.all([
+      getAppInfo(),
+      qbit.json("/api/v2/transfer/info"),
+      qbit.json("/api/v2/sync/maindata?rid=0").catch(() => ({}))
+    ]);
+    const serverState = syncData.server_state || {};
+    response.json({
+      ok: true,
+      qbitUrl: qbit.baseUrl,
+      version: appInfo.version,
+      apiVersion: appInfo.apiVersion,
+      transfer,
+      serverState,
+      daily: getDailyStats(transfer, serverState)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/dashboard", async (request, response, next) => {
+  try {
+    const clientRid = requestedRid(request.query.rid);
+    const rid = dashboardInitialized ? clientRid : 0;
+    const [appInfo, syncData] = await Promise.all([
+      getAppInfo(),
+      qbit.json(`/api/v2/sync/maindata?rid=${rid}`)
+    ]);
+    if (syncData.full_update) dashboardServerState = {};
+    Object.assign(dashboardServerState, syncData.server_state || {});
+    dashboardInitialized = true;
+
+    response.json({
+      ok: true,
+      qbitUrl: qbit.baseUrl,
+      version: appInfo.version,
+      apiVersion: appInfo.apiVersion,
+      rid: requestedRid(syncData.rid),
+      fullUpdate: Boolean(syncData.full_update),
+      torrents: syncData.torrents || {},
+      torrentsRemoved: syncData.torrents_removed || [],
+      categories: syncData.categories,
+      categoriesRemoved: syncData.categories_removed || [],
+      tags: syncData.tags,
+      tagsRemoved: syncData.tags_removed || [],
+      serverState: syncData.server_state || {},
+      daily: getDailyStats(dashboardServerState, dashboardServerState)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/torrents", async (request, response, next) => {
+  try {
+    const allowed = ["filter", "category", "tag", "sort", "reverse", "limit", "offset", "hashes"];
+    const query = Object.fromEntries(allowed.map((key) => [key, request.query[key]]));
+    response.json(await qbit.json(`/api/v2/torrents/info${buildQuery(query)}`));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/transfer", async (_request, response, next) => {
+  try {
+    response.json(await qbit.json("/api/v2/transfer/info"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/categories", async (_request, response, next) => {
+  try {
+    response.json(await qbit.json("/api/v2/torrents/categories"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/tags", async (_request, response, next) => {
+  try {
+    response.json(await qbit.json("/api/v2/torrents/tags"));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/torrents/add", async (request, response, next) => {
+  try {
+    const { urls, category, tags, savepath, paused, skipChecking, sequentialDownload, firstLastPiecePrio } = request.body || {};
+    if (!urls || !String(urls).trim()) {
+      throw new QbitError("请填写磁力链接、种子 URL 或本地可访问 URL", 400);
+    }
+    await qbit.postMultipart("/api/v2/torrents/add", {
+      urls: String(urls).trim(),
+      category,
+      tags,
+      savepath,
+      paused: paused ? "true" : "false",
+      skip_checking: skipChecking ? "true" : "false",
+      sequentialDownload: sequentialDownload ? "true" : "false",
+      firstLastPiecePrio: firstLastPiecePrio ? "true" : "false"
+    });
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/torrents/action", async (request, response, next) => {
+  try {
+    const { action, hashes, deleteFiles, category, tags, dlLimit, upLimit } = request.body || {};
+    const selected = hashField(hashes);
+    if (!action) throw new QbitError("缺少操作类型", 400);
+
+    if (action === "pause") {
+      await withActionFallback(
+        () => qbit.postForm("/api/v2/torrents/pause", { hashes: selected }),
+        () => qbit.postForm("/api/v2/torrents/stop", { hashes: selected })
+      );
+    } else if (action === "resume") {
+      await withActionFallback(
+        () => qbit.postForm("/api/v2/torrents/resume", { hashes: selected }),
+        () => qbit.postForm("/api/v2/torrents/start", { hashes: selected })
+      );
+    } else if (action === "delete") {
+      await qbit.postForm("/api/v2/torrents/delete", { hashes: selected, deleteFiles: deleteFiles ? "true" : "false" });
+    } else if (action === "recheck") {
+      await qbit.postForm("/api/v2/torrents/recheck", { hashes: selected });
+    } else if (action === "reannounce") {
+      await qbit.postForm("/api/v2/torrents/reannounce", { hashes: selected });
+    } else if (action === "setCategory") {
+      await qbit.postForm("/api/v2/torrents/setCategory", { hashes: selected, category: category || "" });
+    } else if (action === "addTags") {
+      await qbit.postForm("/api/v2/torrents/addTags", { hashes: selected, tags: tags || "" });
+    } else if (action === "setDlLimit") {
+      await qbit.postForm("/api/v2/torrents/setDownloadLimit", { hashes: selected, limit: Number(dlLimit || 0) });
+    } else if (action === "setUpLimit") {
+      await qbit.postForm("/api/v2/torrents/setUploadLimit", { hashes: selected, limit: Number(upLimit || 0) });
+    } else {
+      throw new QbitError(`不支持的操作：${action}`, 400);
+    }
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/transfer/limits", async (request, response, next) => {
+  try {
+    const { dlLimit, upLimit } = request.body || {};
+    if (dlLimit !== undefined) {
+      await qbit.postForm("/api/v2/transfer/setDownloadLimit", { limit: Number(dlLimit) });
+    }
+    if (upLimit !== undefined) {
+      await qbit.postForm("/api/v2/transfer/setUploadLimit", { limit: Number(upLimit) });
+    }
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+if (process.env.SERVE_STATIC === "true" || process.argv.includes("--static")) {
+  const distPath = path.resolve(__dirname, "../dist");
+  const indexPath = path.join(distPath, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    console.warn("[static] dist/index.html 不存在，请先运行 npm run build");
+  }
+  app.use(express.static(distPath, { index: "index.html", dotfiles: "deny", fallthrough: true }));
+  app.get(/^\/(?!api).*/, (_request, response, next) => {
+    if (!fs.existsSync(indexPath)) return next(new QbitError("前端尚未构建，请先运行 npm run build", 503));
+    response.sendFile(indexPath);
+  });
+}
+
+app.use((error, _request, response, _next) => {
+  const status = Number(error.status || 500);
+  response.status(status).json({
+    ok: false,
+    message: error.message || "服务器错误",
+    details: error.details
+  });
+});
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`PT qB proxy listening on http://127.0.0.1:${port}`);
+  console.log(`qBittorrent targets: ${qbitUrls.join(" -> ")}`);
+});

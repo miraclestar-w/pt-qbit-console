@@ -1,0 +1,1834 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#10b981" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PT Console" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon-192.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon-192.svg" />
+  <title>PT qB Console</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #030712;
+      --bg-2: #070b14;
+      --sidebar: #090d16;
+      --card: #0f1624;
+      --card-hover: #151f31;
+      --text: #f4f7fb;
+      --text-2: #a6b0c0;
+      --text-3: #647084;
+      --border: rgba(255,255,255,0.06);
+      --border-2: rgba(255,255,255,0.12);
+      --accent: #34d399;
+      --accent-2: #10b981;
+      --accent-bg: rgba(16,185,129,0.11);
+      --accent-border: rgba(52,211,153,0.26);
+      --blue: #38bdf8;
+      --blue-bg: rgba(56,189,248,0.11);
+      --blue-border: rgba(56,189,248,0.24);
+      --red: #fb7185;
+      --red-bg: rgba(244,63,94,0.12);
+      --red-border: rgba(251,113,133,0.26);
+      --orange: #f59e0b;
+      --orange-bg: rgba(245,158,11,0.12);
+      --orange-border: rgba(245,158,11,0.24);
+      --green: #34d399;
+      --green-bg: rgba(52,211,153,0.11);
+      --green-border: rgba(52,211,153,0.24);
+      --cyan: #22d3ee;
+      --cyan-bg: rgba(34,211,238,0.1);
+      --scrollbar-track: #070b14;
+      --scrollbar-thumb: #263244;
+      --scrollbar-thumb-hover: #3a4a61;
+      --radius: 8px;
+      --radius-sm: 6px;
+      --shadow: 0 22px 70px rgba(0,0,0,0.42);
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f8fafc;
+      --bg-2: #f1f5f9;
+      --sidebar: #ffffff;
+      --card: #ffffff;
+      --card-hover: #f8fafc;
+      --text: #0f172a;
+      --text-2: #475569;
+      --text-3: #94a3b8;
+      --border: #e2e8f0;
+      --border-2: #cbd5e1;
+      --accent: #059669;
+      --accent-2: #047857;
+      --accent-bg: rgba(5,150,105,0.08);
+      --accent-border: rgba(5,150,105,0.2);
+      --blue: #0284c7;
+      --blue-bg: rgba(2,132,199,0.08);
+      --blue-border: rgba(2,132,199,0.2);
+      --red: #dc2626;
+      --red-bg: rgba(220,38,38,0.08);
+      --red-border: rgba(220,38,38,0.2);
+      --orange: #ea580c;
+      --orange-bg: rgba(234,88,12,0.08);
+      --orange-border: rgba(234,88,12,0.2);
+      --green: #16a34a;
+      --green-bg: rgba(22,163,74,0.08);
+      --green-border: rgba(22,163,74,0.2);
+      --cyan: #0891b2;
+      --cyan-bg: rgba(8,145,178,0.08);
+      --scrollbar-track: #eef2f7;
+      --scrollbar-thumb: #cbd5e1;
+      --scrollbar-thumb-hover: #94a3b8;
+      --shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background:
+        radial-gradient(circle at 50% -18%, rgba(16,185,129,0.08), transparent 34%),
+        radial-gradient(circle at 8% 92%, rgba(56,189,248,0.05), transparent 34%),
+        linear-gradient(180deg, var(--bg-2), var(--bg) 42%);
+      color: var(--text);
+      display: flex;
+      -webkit-font-smoothing: antialiased;
+    }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+    *::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    *::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+    *::-webkit-scrollbar-thumb {
+      min-height: 42px;
+      border: 2px solid var(--scrollbar-track);
+      border-radius: 999px;
+      background: var(--scrollbar-thumb);
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: var(--scrollbar-thumb-hover);
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-corner {
+      background: var(--scrollbar-track);
+    }
+
+    .stat-value,
+    .nav-item .badge,
+    .tracker-list,
+    .t-name .hash,
+    .tracker-badge,
+    .t-size,
+    .t-speed,
+    .t-progress-cell,
+    .t-peers,
+    .t-ratio,
+    .t-status .sub-text,
+    .table-cols,
+    .batch-bar,
+    .sidebar-section-title {
+      font-family: "Cascadia Mono", "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+    }
+
+    /* ─── Sidebar ─── */
+    .sidebar {
+      width: 244px;
+      flex-shrink: 0;
+      height: 100dvh;
+      position: sticky;
+      top: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      z-index: 10;
+    }
+    .sidebar-brand {
+      padding: 18px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-brand .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+    .sidebar-brand .sub {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+    .sidebar-section { margin-bottom: 20px; }
+    .sidebar-section-title {
+      padding: 0 8px 6px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: var(--text-3);
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      padding: 7px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--text-2);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .nav-item:hover { background: var(--card); color: var(--text); }
+    .nav-item.active { background: rgba(255,255,255,0.04); color: var(--accent); font-weight: 600; }
+    .nav-item .left { display: flex; align-items: center; gap: 8px; }
+    .nav-item .badge {
+      min-width: 22px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+    .badge-normal { background: var(--card); color: var(--text-3); }
+    .badge-warn { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange-border); }
+    .badge-error { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    .badge-accent { background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-border); }
+
+    .tracker-list {
+      display: grid;
+      gap: 3px;
+      padding: 0 2px;
+      font-size: 11px;
+    }
+    .tracker-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 27px;
+      padding: 0 8px;
+      align-items: center;
+      border-radius: var(--radius-sm);
+      color: var(--text-2);
+      border: 0;
+      width: 100%;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .tracker-line:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+    .tracker-line.active {
+      box-shadow: inset 0 0 0 1px currentColor;
+    }
+    .tracker-line span {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .tracker-line b {
+      color: var(--text-3);
+      font-weight: 500;
+    }
+    .tracker-line[class*="tracker-color-"] {
+      border-left: 2px solid currentColor;
+      background: color-mix(in srgb, currentColor 7%, transparent);
+    }
+
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(74,222,128,0.5);
+    }
+    .status-dot.offline { background: var(--red); box-shadow: 0 0 6px rgba(248,113,113,0.5); }
+
+    /* ─── Main ─── */
+    .main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ─── Header Stats Bar ─── */
+    .stats-bar {
+      display: flex;
+      align-items: center;
+      gap: 34px;
+      min-height: 58px;
+      padding: 8px 24px;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      flex-shrink: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .stats-bar::-webkit-scrollbar { display: none; }
+    .stat-item {
+      display: grid;
+      gap: 4px;
+      white-space: nowrap;
+    }
+    .stat-item svg { display: none; }
+    .stat-label {
+      color: var(--text-3);
+      font-family: "Cascadia Mono", "SFMono-Regular", "Consolas", monospace;
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-weight: 300;
+      font-size: 21px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+    .stat-value.green { color: var(--green); }
+    .stat-value.blue { color: var(--blue); }
+    .stat-value.orange { color: var(--orange); }
+    .stat-value.red { color: var(--red); }
+    .stat-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--border-2);
+    }
+
+    /* ─── Page Header ─── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px 12px;
+      flex-shrink: 0;
+    }
+    .page-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .header-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    /* ─── Buttons ─── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-2);
+      background: var(--card);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--card-hover); }
+    .btn-primary {
+      background: #f8fafc;
+      border-color: #f8fafc;
+      color: #020617;
+      font-weight: 600;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-danger {
+      color: var(--red);
+      border-color: var(--red-border);
+      background: var(--red-bg);
+    }
+    .btn-danger:hover { background: rgba(248,113,113,0.2); }
+    .btn svg { width: 14px; height: 14px; }
+
+    /* ─── Alert ─── */
+    .alert {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      margin: 0 20px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      color: var(--red);
+      flex-shrink: 0;
+    }
+
+    /* ─── Toolbar ─── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 24px 12px;
+      flex-shrink: 0;
+    }
+    .search {
+      flex: 1;
+      min-width: 180px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 36px;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      background: var(--card);
+      padding: 0 10px;
+      color: var(--text-3);
+    }
+    .search svg { flex-shrink: 0; width: 14px; height: 14px; }
+    .search input {
+      flex: 1;
+      border: none;
+      background: none;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+    .search input::placeholder { color: var(--text-3); }
+    .toolbar select {
+      height: 36px;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      background: var(--card);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+    }
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+    }
+    .tab {
+      padding: 5px 10px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      color: var(--text-3);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active {
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ─── Torrent Table ─── */
+    .table-wrap {
+      flex: 1;
+      margin: 0 24px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+    .table-header label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .check {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      display: inline-grid;
+      place-content: center;
+      border: 1px solid var(--border-2);
+      border-radius: 5px;
+      background: rgba(255,255,255,0.035);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+      flex: 0 0 auto;
+    }
+    .check:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.14);
+    }
+    .check:hover {
+      border-color: var(--accent-border);
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.08);
+    }
+    .check::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      transform: scale(0);
+      transition: transform 0.12s ease;
+      background: #020617;
+      clip-path: polygon(14% 52%, 36% 74%, 86% 22%, 100% 36%, 36% 100%, 0 64%);
+    }
+    .check:checked {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+    .check:checked::before {
+      transform: scale(1);
+    }
+    .check:indeterminate {
+      border-color: var(--accent);
+      background: var(--accent);
+    }
+    .check:indeterminate::before {
+      width: 8px;
+      height: 2px;
+      border-radius: 99px;
+      clip-path: none;
+      transform: scale(1);
+    }
+
+    .torrent-list {
+      flex: 1;
+      overflow: auto;
+      scrollbar-gutter: stable;
+    }
+
+    .table-wrap {
+      --torrent-cols: 36px 96px minmax(280px, 1fr) 116px 118px 104px 96px 96px 88px;
+    }
+    .table-cols {
+      display: grid;
+      grid-template-columns: var(--torrent-cols);
+      gap: 10px;
+      align-items: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.12);
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+    .sort-head {
+      min-width: 0;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text-3);
+      padding: 0 6px;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .sort-head:hover {
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+    }
+    .sort-head.active {
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .sort-head.right {
+      justify-self: end;
+      justify-content: flex-end;
+      text-align: right;
+    }
+    .sort-head .sort-arrow {
+      width: 10px;
+      min-width: 10px;
+      color: currentColor;
+      opacity: 0.75;
+    }
+    .sort-pill {
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: transparent;
+      color: var(--text-3);
+      padding: 0 8px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .sort-pill:hover {
+      color: var(--text);
+      border-color: var(--border-2);
+    }
+    .sort-pill.active {
+      color: var(--accent);
+      background: var(--accent-bg);
+      border-color: var(--accent-border);
+    }
+    .sort-tools {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .sort-select,
+    .sort-dir {
+      display: none;
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--card);
+      color: var(--text-2);
+      font-family: inherit;
+      font-size: 12px;
+    }
+    .sort-select {
+      min-width: 104px;
+      padding: 0 24px 0 8px;
+    }
+    .sort-dir {
+      width: 30px;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .sort-select:focus-visible,
+    .sort-dir:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.12);
+    }
+
+    .t-row {
+      display: grid;
+      grid-template-columns: var(--torrent-cols);
+      gap: 10px;
+      align-items: center;
+      min-height: 62px;
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+    .t-row:last-child { border-bottom: none; }
+    .t-row:hover { background: var(--card-hover); }
+    .t-row.selected { background: var(--accent-bg); }
+
+    /* 状态行背景色 */
+    .t-row.state-downloading { border-left-color: var(--blue); }
+    .t-row.state-downloading:hover { background: var(--blue-bg); }
+    .t-row.state-seeding { border-left-color: var(--green); }
+    .t-row.state-paused { border-left-color: var(--text-3); opacity: 0.7; }
+    .t-row.state-stalled { background: rgba(245,158,11,0.045); border-left-color: var(--orange); }
+    .t-row.state-stalled:hover { background: var(--orange-bg); }
+    .t-row.state-error { background: rgba(244,63,94,0.045); border-left-color: var(--red); }
+    .t-row.state-error:hover { background: var(--red-bg); }
+    .t-row.state-completed { border-left-color: var(--accent); }
+
+    .t-check { display: grid; place-items: center; }
+    .t-main { min-width: 0; }
+    .t-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .t-name .dot {
+      display: none;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-good { background: var(--green); box-shadow: 0 0 4px rgba(74,222,128,0.5); }
+    .dot-warn { background: var(--orange); box-shadow: 0 0 4px rgba(251,146,60,0.5); }
+    .dot-bad { background: var(--red); box-shadow: 0 0 4px rgba(248,113,113,0.5); }
+    .dot-neutral { background: var(--text-3); }
+    .t-name .title {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .t-name .hash {
+      font-size: 10px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+    .t-info {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 4px;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .tracker-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 14px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .tracker-badge.default { background: var(--card); color: var(--text-3); border: 1px solid var(--border-2); }
+    .tracker-badge.blue { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+    .tracker-badge.green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .tracker-badge.orange { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange-border); }
+    .tracker-color-0 { color: #38bdf8 !important; border-color: rgba(56,189,248,0.38) !important; background: rgba(56,189,248,0.12) !important; }
+    .tracker-color-1 { color: #a78bfa !important; border-color: rgba(167,139,250,0.4) !important; background: rgba(167,139,250,0.13) !important; }
+    .tracker-color-2 { color: #f97316 !important; border-color: rgba(249,115,22,0.42) !important; background: rgba(249,115,22,0.13) !important; }
+    .tracker-color-3 { color: #22c55e !important; border-color: rgba(34,197,94,0.38) !important; background: rgba(34,197,94,0.12) !important; }
+    .tracker-color-4 { color: #fb7185 !important; border-color: rgba(251,113,133,0.42) !important; background: rgba(251,113,133,0.13) !important; }
+    .tracker-color-5 { color: #14b8a6 !important; border-color: rgba(20,184,166,0.38) !important; background: rgba(20,184,166,0.12) !important; }
+    .tracker-color-6 { color: #eab308 !important; border-color: rgba(234,179,8,0.42) !important; background: rgba(234,179,8,0.13) !important; }
+    .tracker-color-7 { color: #ec4899 !important; border-color: rgba(236,72,153,0.42) !important; background: rgba(236,72,153,0.13) !important; }
+    .tracker-color-8 { color: #6366f1 !important; border-color: rgba(99,102,241,0.42) !important; background: rgba(99,102,241,0.13) !important; }
+    .tracker-color-9 { color: #84cc16 !important; border-color: rgba(132,204,22,0.4) !important; background: rgba(132,204,22,0.12) !important; }
+    .tracker-color-10 { color: #06b6d4 !important; border-color: rgba(6,182,212,0.38) !important; background: rgba(6,182,212,0.12) !important; }
+    .tracker-color-11 { color: #f43f5e !important; border-color: rgba(244,63,94,0.42) !important; background: rgba(244,63,94,0.13) !important; }
+    .tracker-color-12 { color: #c084fc !important; border-color: rgba(192,132,252,0.42) !important; background: rgba(192,132,252,0.13) !important; }
+    .tracker-color-13 { color: #10b981 !important; border-color: rgba(16,185,129,0.38) !important; background: rgba(16,185,129,0.12) !important; }
+    .tracker-color-14 { color: #fb923c !important; border-color: rgba(251,146,60,0.42) !important; background: rgba(251,146,60,0.13) !important; }
+    .tracker-color-15 { color: #94a3b8 !important; border-color: rgba(148,163,184,0.38) !important; background: rgba(148,163,184,0.12) !important; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-downloading { background: var(--blue-bg); color: var(--blue); }
+    .badge-seeding { background: var(--green-bg); color: var(--green); }
+    .badge-paused { background: rgba(100,116,139,0.15); color: var(--text-3); }
+    .badge-stalled { background: var(--orange-bg); color: var(--orange); }
+    .badge-error { background: var(--red-bg); color: var(--red); }
+    .badge-completed { background: var(--accent-bg); color: var(--accent); }
+    .meta-hash {
+      color: var(--text-3);
+      font-size: 10px;
+    }
+    .tracker-error {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--red);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .tracker-error::before {
+      content: "";
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-right: 4px;
+      border: 1.5px solid currentColor;
+      border-radius: 50%;
+      vertical-align: -1px;
+    }
+    .t-progress {
+      position: relative;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    :root[data-theme="light"] .t-progress { background: rgba(0,0,0,0.06); }
+    .t-progress.p-low { background: rgba(251,113,133,0.18); }
+    .t-progress.p-mid { background: rgba(244,114,182,0.18); }
+    .t-progress.p-high { background: rgba(56,189,248,0.18); }
+    .t-progress.p-done { background: rgba(52,211,153,0.18); }
+    .t-progress.p-paused { background: rgba(100,116,139,0.22); }
+    .t-progress.p-error { background: rgba(251,113,133,0.22); }
+    .t-progress.p-stalled { background: rgba(245,158,11,0.24); }
+    .t-progress-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 0.3s;
+    }
+    .t-progress-fill.p-low { background: linear-gradient(90deg, #fb7185, #f97316); }
+    .t-progress-fill.p-mid { background: linear-gradient(90deg, #f43f5e, #f472b6); }
+    .t-progress-fill.p-high { background: linear-gradient(90deg, #38bdf8, #22d3ee); }
+    .t-progress-fill.p-done { background: linear-gradient(90deg, #10b981, #34d399); }
+    .t-progress-fill.p-paused { background: linear-gradient(90deg, #64748b, #94a3b8); }
+    .t-progress-fill.p-error { background: repeating-linear-gradient(135deg, #fb7185 0 8px, #be123c 8px 16px); }
+    .t-progress-fill.p-stalled { background: repeating-linear-gradient(135deg, #f59e0b 0 8px, #92400e 8px 16px); }
+    .t-progress-cell {
+      display: grid;
+      grid-template-columns: 44px minmax(58px, 1fr);
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .t-progress-cell .t-progress {
+      height: 6px;
+      min-width: 0;
+    }
+    .t-progress-percent {
+      text-align: right;
+      font-size: 10px;
+      line-height: 1;
+      white-space: nowrap;
+      color: var(--blue);
+    }
+    .t-progress-percent.p-low,
+    .t-progress-percent.p-error { color: var(--red); }
+    .t-progress-percent.p-mid { color: #f472b6; }
+    .t-progress-percent.p-stalled { color: var(--orange); }
+    .t-progress-percent.p-high { color: var(--blue); }
+    .t-progress-percent.p-done { color: var(--accent); }
+    .t-progress-percent.p-paused { color: var(--text-3); }
+
+    .t-size {
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .t-peers {
+      text-align: right;
+      font-size: 12px;
+      white-space: nowrap;
+      color: var(--blue);
+    }
+    .t-peers .leech {
+      color: var(--accent);
+      margin-left: 3px;
+    }
+    .t-peers .peer-empty {
+      color: var(--text-3);
+      letter-spacing: 0.12em;
+    }
+    .t-speed {
+      text-align: right;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .t-speed.up { color: var(--cyan); }
+    .t-speed.down { color: var(--orange); }
+    .t-speed.idle { color: var(--text-3); }
+    .t-ratio {
+      text-align: right;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .t-ratio .good { color: var(--green); }
+    .t-ratio .warn { color: var(--orange); }
+    .t-ratio .bad { color: var(--red); }
+    .t-ratio .neutral { color: var(--text-2); }
+    .t-status {
+      text-align: left;
+      min-width: 0;
+    }
+    .t-status .main-text {
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .t-status .sub-text {
+      font-size: 9px;
+      color: var(--text-3);
+    }
+
+    /* ─── Batch Bar ─── */
+    .batch-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--sidebar);
+      border: 1px solid var(--border-2);
+      box-shadow: var(--shadow);
+      z-index: 20;
+      transition: transform 0.2s;
+    }
+    .batch-bar.show { transform: translateX(-50%) translateY(0); }
+    .batch-bar strong { font-size: 12px; padding: 0 6px; white-space: nowrap; }
+
+    /* ─── Modal ─── */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(0,0,0,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-bg.open { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: min(580px, 92vw);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      background: var(--sidebar);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      transform: translateY(12px);
+      transition: transform 0.2s;
+    }
+    .modal-bg.open .modal { transform: translateY(0); }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .modal-head h2 { font-size: 18px; font-weight: 700; }
+    .modal-head p { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+    .modal-head .btn-close {
+      width: 28px; height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text-3);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .modal-head .btn-close:hover { background: var(--card-hover); color: var(--text); }
+    .modal textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      background: var(--card);
+      color: var(--text);
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      outline: none;
+    }
+    .modal textarea:focus { border-color: var(--accent-border); }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .form-row .full { grid-column: 1 / -1; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 11px; font-weight: 600; color: var(--text-3); }
+    .form-group input, .form-group select {
+      height: 34px;
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      background: var(--card);
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 12px;
+      outline: none;
+    }
+    .form-check {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-2);
+      margin-top: 12px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .empty {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-3);
+      font-size: 13px;
+    }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 1024px) {
+      .sidebar { display: none; }
+    }
+    @media (max-width: 960px) {
+      .table-wrap {
+        --torrent-cols: 36px 86px minmax(220px, 1fr) 104px 110px 88px 88px 88px 74px;
+      }
+      .sort-head { padding: 0 4px; }
+      .t-row,
+      .table-cols { gap: 8px; }
+    }
+    @media (max-width: 768px) {
+      .stats-bar {
+        display: flex;
+        min-height: 58px;
+        gap: 18px;
+        padding: 8px 14px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .stat-value { font-size: 17px; }
+      .page-header { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 14px 8px; }
+      .page-header h1 { font-size: 16px; }
+      .header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+      .header-actions .btn { padding: 7px 6px; font-size: 11px; }
+      .header-actions .btn-primary { grid-column: 1 / -1; }
+      .toolbar { padding: 0 14px 10px; gap: 6px; }
+      .tabs { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tab { padding: 5px 8px; font-size: 11px; }
+      .table-wrap { margin: 0 14px 14px; }
+      .table-cols { display: none; }
+      .table-header { align-items: flex-start; }
+      .table-header label { min-height: 26px; }
+      .sort-pill { display: none; }
+      .sort-select,
+      .sort-dir { display: inline-flex; }
+      .t-row {
+        grid-template-columns: 28px 78px minmax(0, 1fr);
+        gap: 8px;
+        padding: 10px 12px;
+        align-items: start;
+      }
+      .t-status {
+        grid-column: 2;
+        grid-row: 1;
+        display: block;
+        text-align: left;
+      }
+      .t-status .sub-text { display: none; }
+      .t-main { grid-column: 3; }
+      .t-progress-cell {
+        grid-column: 2 / 4;
+        grid-template-columns: 46px minmax(0, 1fr);
+        margin-top: 2px;
+      }
+      .t-peers {
+        grid-column: 2 / 4;
+        text-align: left;
+        font-size: 11px;
+      }
+      .t-size { display: none; }
+      .t-speed {
+        grid-column: 2 / 4;
+        display: block;
+        margin-top: 2px;
+        text-align: left;
+        font-size: 11px;
+      }
+      .t-ratio {
+        display: none;
+      }
+      .t-name .title { font-size: 12px; }
+      .t-name .hash { display: none; }
+      .batch-bar { bottom: 12px; left: 14px; right: 14px; transform: translateX(0) translateY(120%); width: auto; }
+      .batch-bar.show { transform: translateX(0) translateY(0); }
+      .batch-bar .btn { padding: 5px 8px; font-size: 11px; }
+    }
+    @media (max-width: 480px) {
+      .toolbar { flex-wrap: wrap; }
+      .search { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+        PT Console
+      </div>
+      <div class="sub" id="sidebar-url">连接中...</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">种子状态</div>
+        <button class="nav-item active" onclick="setFilter('all')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>全部种子</span>
+          <span class="badge badge-normal" id="badge-all">0</span>
+        </button>
+        <button class="nav-item" onclick="setFilter('downloading')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>正在下载</span>
+          <span class="badge badge-normal" id="badge-dl">0</span>
+        </button>
+        <button class="nav-item" onclick="setFilter('seeding')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>正在做种</span>
+          <span class="badge badge-normal" id="badge-seed">0</span>
+        </button>
+        <button class="nav-item" onclick="setFilter('paused')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>已暂停</span>
+          <span class="badge badge-normal" id="badge-pause">0</span>
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">PT 健康度</div>
+        <button class="nav-item" onclick="setFilter('stalled')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>卡住 / 等待</span>
+          <span class="badge badge-warn" id="badge-stall">0</span>
+        </button>
+        <button class="nav-item" onclick="setFilter('error')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>异常 / 错误</span>
+          <span class="badge badge-error" id="badge-error">0</span>
+        </button>
+        <button class="nav-item" onclick="setFilter('completed')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>已完成</span>
+          <span class="badge badge-accent" id="badge-done">0</span>
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">站点聚合</div>
+        <div class="tracker-list" id="tracker-list">
+          <div class="tracker-line"><span>等待数据</span><b>0</b></div>
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">连接中...</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="stat-label">上传</span>
+        <span class="stat-value blue" id="up-speed">0 B/s</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <span class="stat-label">下载</span>
+        <span class="stat-value orange" id="dl-speed">0 B/s</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">今日上传</span>
+        <span class="stat-value green" id="today-up">0 B</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">今日下载</span>
+        <span class="stat-value orange" id="today-dl">0 B</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">任务</span>
+        <span class="stat-value" id="total-count">0</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">分享率</span>
+        <span class="stat-value green" id="avg-ratio">0.00</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">需处理</span>
+        <span class="stat-value red" id="alert-count">0</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-label">磁盘剩余</span>
+        <span class="stat-value blue" id="disk-free">-</span>
+      </div>
+    </div>
+
+    <div id="alert-box" class="alert" style="display:none"></div>
+
+    <!-- Header -->
+    <header class="page-header">
+      <h1>种子控制台</h1>
+      <div class="header-actions">
+        <button class="btn" id="btn-webui">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          原 WebUI
+        </button>
+        <button class="btn" onclick="refresh()" id="btn-refresh">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新
+        </button>
+        <button class="btn" onclick="toggleTheme()" id="btn-theme">
+          <svg id="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="btn btn-primary" onclick="openModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          添加种子
+        </button>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="搜索名称、Hash、站点..." oninput="render()" />
+      </div>
+      <select id="cat-select" onchange="render()">
+        <option value="all">全部分类</option>
+      </select>
+      <div class="tabs" id="tab-bar">
+        <button class="tab active" onclick="setFilter('all')">全部</button>
+        <button class="tab" onclick="setFilter('downloading')">下载</button>
+        <button class="tab" onclick="setFilter('seeding')">做种</button>
+        <button class="tab" onclick="setFilter('paused')">暂停</button>
+        <button class="tab" onclick="setFilter('stalled')">卡住</button>
+        <button class="tab" onclick="setFilter('error')">异常</button>
+        <button class="tab" onclick="setFilter('completed')">完成</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <label>
+          <input type="checkbox" class="check" id="check-all" onchange="toggleAll()" />
+          <span id="table-count">当前 0 个</span>
+        </label>
+        <div class="sort-tools">
+          <button class="sort-pill active" data-sort="risk" onclick="setSort('risk')">
+            风险优先 <span class="sort-arrow">↓</span>
+          </button>
+          <select class="sort-select" id="sort-select" onchange="setSort(this.value)">
+            <option value="risk">风险优先</option>
+            <option value="name">种子名称</option>
+            <option value="progress">进度</option>
+            <option value="peers">做种/下载数</option>
+            <option value="size">大小</option>
+            <option value="upspeed">上传速度</option>
+            <option value="dlspeed">下载速度</option>
+            <option value="ratio">分享率</option>
+            <option value="status">状态</option>
+          </select>
+          <button class="sort-dir" id="sort-dir" onclick="toggleSortDir()" aria-label="切换排序方向">↓</button>
+        </div>
+      </div>
+      <div class="table-cols">
+        <span></span>
+        <button class="sort-head" data-sort="status" onclick="setSort('status')">状态 <span class="sort-arrow"></span></button>
+        <button class="sort-head" data-sort="name" onclick="setSort('name')">种子名称 <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="progress" onclick="setSort('progress')">进度 <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="peers" onclick="setSort('peers')">做种数(下载数) <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="size" onclick="setSort('size')">大小 <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="upspeed" onclick="setSort('upspeed')">上传速度 <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="dlspeed" onclick="setSort('dlspeed')">下载速度 <span class="sort-arrow"></span></button>
+        <button class="sort-head right" data-sort="ratio" onclick="setSort('ratio')">分享率 <span class="sort-arrow"></span></button>
+      </div>
+      <div class="torrent-list" id="torrent-list">
+        <div class="empty">正在读取种子列表...</div>
+      </div>
+    </div>
+
+    <!-- Batch Bar -->
+    <div class="batch-bar" id="batch-bar">
+      <strong id="batch-count">已选 0 个</strong>
+      <button class="btn" onclick="runAction('resume')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        开始
+      </button>
+      <button class="btn" onclick="runAction('pause')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        暂停
+      </button>
+      <button class="btn" onclick="runAction('reannounce')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        汇报
+      </button>
+      <button class="btn" onclick="runAction('recheck')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        校验
+      </button>
+      <button class="btn btn-danger" onclick="runAction('delete')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        删除
+      </button>
+      <button class="btn" onclick="clearSelection()" title="清空选择">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Add Modal -->
+  <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <h2>添加种子</h2>
+          <p>支持磁力链接、种子 URL，一行一个</p>
+        </div>
+        <button class="btn-close" onclick="closeModal()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <textarea id="add-urls" placeholder="magnet:?xt=urn:btih:..."></textarea>
+      <div class="form-row">
+        <div class="form-group">
+          <label>分类</label>
+          <select id="add-cat"></select>
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <input type="text" id="add-tags" placeholder="例如：PT, 动画" />
+        </div>
+        <div class="form-group full">
+          <label>保存路径</label>
+          <input type="text" id="add-path" placeholder="留空使用 qB 默认路径" />
+        </div>
+      </div>
+      <label class="form-check">
+        <input type="checkbox" id="add-paused" class="check" />
+        添加后先暂停
+      </label>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="addTorrent()" id="btn-add">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          添加到 qB
+        </button>
+      </div>
+    </div>
+  </div>
+
+<script>
+let theme = localStorage.getItem('pt-qb-theme') || 'dark';
+let filter = 'all';
+let sortKey = 'risk';
+let sortDir = 'desc';
+let trackerFilter = 'all';
+let selected = new Set();
+let categories = {};
+let categoryList = [];
+let tagList = [];
+let allTorrents = [];
+
+document.documentElement.dataset.theme = theme;
+refresh();
+setInterval(() => refresh(true), 5000);
+
+async function apiJson(url, init) {
+  const r = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
+  if (!r.ok) {
+    const b = await r.json().catch(() => null);
+    throw new Error(b?.message || '请求失败: ' + r.status);
+  }
+  return r.json();
+}
+
+function fmtBytes(b) {
+  if (!Number.isFinite(b) || b <= 0) return '0 B';
+  const u = ['B','KB','MB','GB','TB','PB'];
+  const i = Math.min(Math.floor(Math.log(b)/Math.log(1024)), u.length-1);
+  return (b/1024**i).toFixed(i<2?0:1)+' '+u[i];
+}
+function fmtSpeed(b) { return fmtBytes(b)+'/s'; }
+function fmtEta(s) {
+  if (!Number.isFinite(s) || s<=0 || s>=8640000) return '-';
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  if (d) return d+'天'+h+'小时';
+  if (h) return h+'小时'+m+'分';
+  return Math.max(1,m)+'分';
+}
+
+const statusText = {
+  downloading:'下载中',forcedDL:'强制下载',stalledDL:'等待下载',metaDL:'取元数据',
+  uploading:'做种中',forcedUP:'强制做种',stalledUP:'等待上传',
+  pausedDL:'已暂停',pausedUP:'已暂停',stoppedDL:'已停止',stoppedUP:'已停止',
+  queuedDL:'下载排队',queuedUP:'做种排队',checkingDL:'校验中',checkingUP:'校验中',
+  checkingResumeData:'检查恢复',moving:'移动中',error:'错误',missingFiles:'文件缺失',unknown:'未知'
+};
+function statusKind(t) {
+  if (['error','missingFiles'].includes(t.state)) return 'error';
+  if (t.state.includes('checking')) return 'checking';
+  if (t.state.includes('paused')||t.state.includes('stopped')) return 'paused';
+  if (t.state.includes('uploading')||t.state.includes('forcedUP')||t.state.includes('queuedUP')||t.state.includes('stalledUP')) return 'seeding';
+  if (t.state.includes('stalled')) return 'stalled';
+  if (t.state.includes('downloading')||t.state.includes('forcedDL')||t.state.includes('metaDL')||t.state.includes('queuedDL')) return 'downloading';
+  if (t.progress>=1) return 'completed';
+  return 'all';
+}
+function tHealth(t) {
+  const k = statusKind(t);
+  if (k==='error') return 'bad';
+  if (k==='stalled') return 'warn';
+  if (t.progress>=1 && t.ratio<1) return 'warn';
+  if (k==='seeding') return 'good';
+  return 'neutral';
+}
+function sortByRisk(a,b) {
+  const s = t => { const k=statusKind(t); if(k==='error')return 5;if(k==='stalled')return 4;if(t.progress>=1&&t.ratio<1)return 3;if(k==='downloading')return 2;return 1; };
+  return s(b)-s(a)||b.added_on-a.added_on;
+}
+
+const sortMeta = {
+  risk: { label: '风险优先', dir: 'desc' },
+  name: { label: '种子名称', dir: 'asc' },
+  progress: { label: '进度', dir: 'desc' },
+  peers: { label: '做种/下载数', dir: 'desc' },
+  size: { label: '大小', dir: 'desc' },
+  upspeed: { label: '上传速度', dir: 'desc' },
+  dlspeed: { label: '下载速度', dir: 'desc' },
+  ratio: { label: '分享率', dir: 'desc' },
+  status: { label: '状态', dir: 'asc' }
+};
+
+function setSort(key) {
+  if (!sortMeta[key]) return;
+  if (sortKey === key) {
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortKey = key;
+    sortDir = sortMeta[key].dir;
+  }
+  render();
+}
+
+function toggleSortDir() {
+  sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  render();
+}
+
+function sortValue(t, key) {
+  if (key === 'name') return (t.name || '').toLowerCase();
+  if (key === 'progress') return Number(t.progress) || 0;
+  if (key === 'peers') return peerCount(t, ['num_complete', 'num_seeds', 'seeds']) || 0;
+  if (key === 'size') return Number(t.size) || 0;
+  if (key === 'upspeed') return Number(t.upspeed) || 0;
+  if (key === 'dlspeed') return Number(t.dlspeed) || 0;
+  if (key === 'ratio') return Number(t.ratio) || 0;
+  if (key === 'status') return statusText[t.state] || statusKind(t) || t.state || '';
+  return 0;
+}
+
+function compareBySort(a,b) {
+  if (sortKey === 'risk') {
+    return sortDir === 'desc' ? sortByRisk(a,b) : -sortByRisk(a,b);
+  }
+  const av = sortValue(a, sortKey);
+  const bv = sortValue(b, sortKey);
+  let result = 0;
+  if (typeof av === 'string' || typeof bv === 'string') {
+    result = String(av).localeCompare(String(bv), 'zh-CN', { numeric: true, sensitivity: 'base' });
+  } else {
+    result = av - bv;
+  }
+  if (result === 0) return sortByRisk(a,b);
+  return sortDir === 'asc' ? result : -result;
+}
+
+function getVisibleTorrents() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const cat = document.getElementById('cat-select').value;
+  return allTorrents
+    .filter(t => filter==='all' || statusKind(t)===filter || (filter==='completed'&&t.progress>=1))
+    .filter(t => trackerFilter==='all' || trackerHost(t.tracker)===trackerFilter)
+    .filter(t => cat==='all' || t.category===cat)
+    .filter(t => !q || [t.name,t.category,t.tags,t.save_path,t.tracker].some(v=>(v||'').toLowerCase().includes(q)))
+    .sort(compareBySort);
+}
+
+function renderSortState() {
+  document.querySelectorAll('[data-sort]').forEach(btn => {
+    const active = btn.dataset.sort === sortKey;
+    btn.classList.toggle('active', active);
+    const arrow = btn.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = active ? (sortDir === 'asc' ? '↑' : '↓') : '';
+  });
+  const select = document.getElementById('sort-select');
+  if (select) select.value = sortKey;
+  const dir = document.getElementById('sort-dir');
+  if (dir) dir.textContent = sortDir === 'asc' ? '↑' : '↓';
+}
+
+async function refresh(silent) {
+  try {
+    const [health, torrents, cats, tags] = await Promise.all([
+      apiJson('/api/health'),
+      apiJson('/api/torrents?sort=added_on&reverse=true'),
+      apiJson('/api/categories'),
+      apiJson('/api/tags')
+    ]);
+    allTorrents = torrents;
+    categories = cats;
+    categoryList = Object.keys(cats);
+    tagList = tags;
+
+    document.getElementById('sidebar-url').textContent = health.qbitUrl;
+    document.getElementById('btn-webui').onclick = () => window.open(health.qbitUrl, '_blank');
+    document.getElementById('status-dot').classList.remove('offline');
+    document.getElementById('status-text').textContent = 'qB '+health.version;
+
+    document.getElementById('dl-speed').textContent = fmtSpeed(health.transfer.dl_info_speed);
+    document.getElementById('up-speed').textContent = fmtSpeed(health.transfer.up_info_speed);
+    document.getElementById('today-dl').textContent = fmtBytes(health.daily?.downloaded || 0);
+    document.getElementById('today-up').textContent = fmtBytes(health.daily?.uploaded || 0);
+    document.getElementById('disk-free').textContent = Number.isFinite(Number(health.serverState?.free_space_on_disk))
+      ? fmtBytes(Number(health.serverState.free_space_on_disk))
+      : '-';
+
+    const stats = calcStats(torrents);
+    document.getElementById('total-count').textContent = stats.total;
+    document.getElementById('avg-ratio').textContent = stats.avgRatio;
+    document.getElementById('alert-count').textContent = stats.stalled+stats.error;
+
+    document.getElementById('badge-all').textContent = stats.total;
+    document.getElementById('badge-dl').textContent = stats.downloading;
+    document.getElementById('badge-seed').textContent = stats.seeding;
+    document.getElementById('badge-pause').textContent = stats.paused;
+    document.getElementById('badge-stall').textContent = stats.stalled;
+    document.getElementById('badge-error').textContent = stats.error;
+    document.getElementById('badge-done').textContent = stats.completed;
+    updateTrackers(torrents);
+
+    updateCatSelect();
+    render();
+  } catch(e) {
+    document.getElementById('status-dot').classList.add('offline');
+    document.getElementById('status-text').textContent = '连接失败';
+    document.getElementById('alert-box').style.display = 'flex';
+    document.getElementById('alert-box').textContent = e.message || '连接失败';
+  }
+}
+
+function calcStats(torrents) {
+  const done = torrents.filter(t=>t.progress>=1);
+  return {
+    total: torrents.length,
+    downloading: torrents.filter(t=>statusKind(t)==='downloading').length,
+    seeding: torrents.filter(t=>statusKind(t)==='seeding').length,
+    paused: torrents.filter(t=>statusKind(t)==='paused').length,
+    stalled: torrents.filter(t=>statusKind(t)==='stalled').length,
+    error: torrents.filter(t=>statusKind(t)==='error').length,
+    completed: done.length,
+    avgRatio: done.length ? (done.reduce((s,t)=>s+t.ratio,0)/done.length).toFixed(2) : '0.00'
+  };
+}
+
+function trackerHost(tracker) {
+  if (!tracker) return '未汇报';
+  try {
+    return new URL(tracker).hostname.replace(/^www\./, '');
+  } catch {
+    return tracker.replace(/^https?:\/\//, '').split('/')[0] || tracker;
+  }
+}
+
+function updateTrackers(torrents) {
+  const box = document.getElementById('tracker-list');
+  const counts = new Map();
+  torrents.forEach(t => {
+    const host = trackerHost(t.tracker);
+    counts.set(host, (counts.get(host) || 0) + 1);
+  });
+  const rows = [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 18);
+  box.innerHTML = rows.length
+    ? rows.map(([host,count]) => '<button type="button" class="tracker-line '+trackerColorClassForHost(host)+(trackerFilter===host?' active':'')+'" onclick="setTrackerFilter(\''+escAttr(host)+'\')"><span title="'+esc(host)+'">'+esc(host)+'</span><b>'+count+'</b></button>').join('')
+    : '<div class="tracker-line"><span>等待数据</span><b>0</b></div>';
+}
+
+function setTrackerFilter(host) {
+  trackerFilter = trackerFilter === host ? 'all' : host;
+  selected.clear();
+  updateTrackers(allTorrents);
+  render();
+  updateBatch();
+}
+
+function updateCatSelect() {
+  const sel = document.getElementById('cat-select');
+  sel.innerHTML = '<option value="all">全部分类</option>' + categoryList.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+}
+
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll('.tab').forEach(b => {
+    const map = {all:'全部',downloading:'下载',seeding:'做种',paused:'暂停',stalled:'卡住',error:'异常',completed:'完成'};
+    b.classList.toggle('active', b.textContent === map[f]);
+  });
+  document.querySelectorAll('.nav-item').forEach(b => {
+    const txt = b.textContent.trim();
+    const map = {all:'全部种子',downloading:'正在下载',seeding:'正在做种',paused:'已暂停',stalled:'卡住',error:'异常',completed:'已完成'};
+    b.classList.toggle('active', txt.startsWith(map[f]));
+  });
+  render();
+}
+
+function stableColorIndex(value) {
+  let hash = 0;
+  const text = String(value || 'default');
+  for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash % 16;
+}
+
+function trackerColorClassForHost(host) {
+  return 'tracker-color-' + stableColorIndex(host);
+}
+
+function trackerColorClass(tracker) {
+  return trackerColorClassForHost(trackerHost(tracker));
+}
+
+function getTrackerShort(tracker) {
+  if (!tracker) return '';
+  const t = tracker.toLowerCase();
+  if (t.includes('m-team')) return 'MT';
+  if (t.includes('chdbits')) return 'CHD';
+  if (t.includes('hdsky')) return 'HDSky';
+  if (t.includes('ourbits')) return 'OurBits';
+  if (t.includes('pter')) return 'PTer';
+  if (t.includes('springsunday')) return 'SSD';
+  if (t.includes('open.cd')) return 'OC';
+  if (t.includes('totheglory')) return 'TTG';
+  return tracker.replace(/https?:\/\//, '').split('/')[0].split('.').slice(-2, -1)[0] || '';
+}
+
+function progressTone(t, pct) {
+  const kind = statusKind(t);
+  if (pct >= 100 || kind === 'seeding' || kind === 'completed') return 'p-done';
+  if (kind === 'error') return 'p-error';
+  if (kind === 'stalled') return 'p-stalled';
+  if (kind === 'paused') return 'p-paused';
+  if (pct < 35) return 'p-low';
+  if (pct < 75) return 'p-mid';
+  return 'p-high';
+}
+
+function peerCount(t, keys) {
+  for (const key of keys) {
+    const value = Number(t[key]);
+    if (Number.isFinite(value) && value >= 0) return value;
+  }
+  return null;
+}
+
+function formatPeers(t) {
+  const seeds = peerCount(t, ['num_complete', 'num_seeds', 'seeds']);
+  const leechs = peerCount(t, ['num_incomplete', 'num_leechs', 'leechs']);
+  if (seeds === null && leechs === null) return '<span class="peer-empty">--</span>';
+  const seedText = seeds === null ? '-' : String(seeds);
+  const leechText = leechs === null ? '-' : String(leechs);
+  return '<span>'+seedText+'</span> <span class="leech">('+leechText+')</span>';
+}
+
+function trackerIssueText(t, kind) {
+  const raw = t.tracker_msg || t.tracker_message || t.tracker_error || t.last_tracker_error || t.error_message || '';
+  const text = String(raw || '').trim();
+  if (text && text !== '0' && text !== 'undefined' && text !== 'null') return text;
+  if (kind === 'error') return statusText[t.state] || '异常';
+  return '';
+}
+
+function render() {
+  const visible = getVisibleTorrents();
+  const checkAll = document.getElementById('check-all');
+  const selectedVisible = visible.filter(t => selected.has(t.hash)).length;
+  checkAll.checked = visible.length > 0 && selectedVisible === visible.length;
+  checkAll.indeterminate = selectedVisible > 0 && selectedVisible < visible.length;
+  renderSortState();
+
+  document.getElementById('table-count').textContent = '当前 '+visible.length+' 个' + (trackerFilter==='all' ? '' : ' · '+trackerFilter);
+  const list = document.getElementById('torrent-list');
+  if (!visible.length) {
+    list.innerHTML = '<div class="empty">没有匹配的种子</div>';
+    return;
+  }
+  list.innerHTML = visible.map(t => {
+    const h = tHealth(t);
+    const dotCls = {good:'dot-good',warn:'dot-warn',bad:'dot-bad'}[h] || 'dot-neutral';
+    const kind = statusKind(t);
+    const stateCls = kind !== 'all' ? 'state-'+kind : '';
+    const badgeCls = 'badge-'+kind;
+    const status = statusText[t.state] || t.state;
+    const pct = Math.max(0, Math.min(100, t.progress*100));
+    const checked = selected.has(t.hash);
+    const lowR = t.progress>=1 && t.ratio<1;
+    const progressCls = progressTone(t, pct);
+    const trackerCls = trackerColorClass(t.tracker);
+    const trackerShort = getTrackerShort(t.tracker);
+    const trackerIssue = trackerIssueText(t, kind);
+    const hashShort = t.hash ? t.hash.substring(0,6)+'...'+t.hash.substring(t.hash.length-4) : '';
+
+    let ratioCls = 'neutral';
+    if (t.progress >= 1) {
+      if (t.ratio >= 2) ratioCls = 'good';
+      else if (t.ratio >= 1) ratioCls = 'good';
+      else if (t.ratio >= 0.5) ratioCls = 'warn';
+      else ratioCls = 'bad';
+    }
+
+    let statusMain = status;
+    let statusSub = '';
+    if (kind === 'downloading') {
+      statusSub = 'ETA '+fmtEta(t.eta);
+    } else if (kind === 'seeding') {
+      statusSub = '剩余 '+fmtBytes(t.amount_left);
+    } else if (kind === 'error') {
+      statusSub = '需处理';
+    } else if (kind === 'stalled') {
+      statusSub = '无连接';
+    }
+
+    return '<div class="t-row '+stateCls+(checked?' selected':'')+'" data-hash="'+t.hash+'">'
+      + '<div class="t-check"><input type="checkbox" class="check"'+(checked?' checked':'')+' onchange="toggle(\''+t.hash+'\')" /></div>'
+      + '<div class="t-status">'
+        + '<div class="main-text" style="color:var(--'+(kind==='error'?'red':kind==='stalled'?'orange':kind==='downloading'?'blue':'text-2')+')">'+status+'</div>'
+        + '<div class="sub-text">'+(statusSub || fmtEta(t.eta))+'</div>'
+      + '</div>'
+      + '<div class="t-main">'
+        + '<div class="t-name"><span class="title" title="'+esc(t.name)+'">'+esc(t.name)+'</span></div>'
+        + '<div class="t-info">'
+          + (trackerShort ? '<span class="tracker-badge '+trackerCls+'">'+trackerShort+'</span>' : '')
+          + '<span class="meta-hash">Hash: '+hashShort+'</span>'
+          + (trackerIssue ? '<span class="tracker-error" title="Tracker: '+esc(trackerIssue)+'">Tracker: '+esc(trackerIssue)+'</span>' : '')
+        + '</div>'
+      + '</div>'
+      + '<div class="t-progress-cell">'
+        + '<span class="t-progress-percent '+progressCls+'">'+pct.toFixed(pct >= 100 ? 0 : 1)+'%</span>'
+        + '<div class="t-progress '+progressCls+'"><span class="t-progress-fill '+progressCls+'" style="width:'+pct+'%"></span></div>'
+      + '</div>'
+      + '<div class="t-peers">'+formatPeers(t)+'</div>'
+      + '<div class="t-size">'+fmtBytes(t.size)+'</div>'
+      + '<div class="t-speed '+(t.upspeed>0?'up':'idle')+'">↑ '+fmtSpeed(t.upspeed)+'</div>'
+      + '<div class="t-speed '+(t.dlspeed>0?'down':'idle')+'">↓ '+fmtSpeed(t.dlspeed)+'</div>'
+      + '<div class="t-ratio"><span class="'+ratioCls+'">'+t.ratio.toFixed(2)+'</span></div>'
+    + '</div>';
+  }).join('');
+}
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+function escAttr(s) { return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '); }
+
+function toggle(hash) {
+  if (selected.has(hash)) selected.delete(hash); else selected.add(hash);
+  render(); updateBatch();
+}
+function toggleAll() {
+  const visible = getVisibleTorrents();
+  const allChecked = visible.every(t=>selected.has(t.hash));
+  visible.forEach(t => allChecked ? selected.delete(t.hash) : selected.add(t.hash));
+  render(); updateBatch();
+}
+function clearSelection() { selected.clear(); render(); updateBatch(); }
+function updateBatch() {
+  const bar = document.getElementById('batch-bar');
+  if (selected.size > 0) {
+    bar.classList.add('show');
+    document.getElementById('batch-count').textContent = '已选 '+selected.size+' 个';
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+async function runAction(action) {
+  if (!selected.size) return;
+  if (action==='delete' && !confirm('确定删除 '+selected.size+' 个任务？默认只删任务，不删文件。')) return;
+  try {
+    await apiJson('/api/torrents/action', {
+      method: 'POST',
+      body: JSON.stringify({ action, hashes: [...selected] })
+    });
+    selected.clear(); updateBatch(); await refresh(true);
+  } catch(e) { alert(e.message || '操作失败'); }
+}
+
+function openModal() {
+  const sel = document.getElementById('add-cat');
+  sel.innerHTML = '<option value="">不指定</option>' + categoryList.map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  document.getElementById('add-urls').value = '';
+  document.getElementById('add-tags').value = '';
+  document.getElementById('add-path').value = '';
+  document.getElementById('add-paused').checked = false;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('modal-bg').classList.remove('open');
+}
+async function addTorrent() {
+  const urls = document.getElementById('add-urls').value.trim();
+  if (!urls) return;
+  try {
+    await apiJson('/api/torrents/add', {
+      method: 'POST',
+      body: JSON.stringify({
+        urls,
+        category: document.getElementById('add-cat').value,
+        tags: document.getElementById('add-tags').value,
+        savepath: document.getElementById('add-path').value,
+        paused: document.getElementById('add-paused').checked
+      })
+    });
+    closeModal(); await refresh(true);
+  } catch(e) { alert(e.message || '添加失败'); }
+}
+
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('pt-qb-theme', theme);
+}
+</script>
+</body>
+</html>

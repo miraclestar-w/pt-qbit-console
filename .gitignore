@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.history/
+.mimocode/
+*.tsbuildinfo
+npm-debug.log*
+vite.config.js
+vite.config.d.ts
