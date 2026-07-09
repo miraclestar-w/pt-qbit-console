@@ -22,13 +22,33 @@ function loadDotEnv() {
 
 loadDotEnv();
 
-const port = Number(process.env.PORT || 8787);
+function readIntEnv(name, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const value = Number(process.env[name]);
+  if (Number.isSafeInteger(value) && value >= min && value <= max) return value;
+  return fallback;
+}
+
+function normalizeBaseUrl(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    if (!["http:", "https:"].includes(url.protocol)) return "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+const port = readIntEnv("PORT", 8787, { min: 1, max: 65535 });
 const qbitUrls = [...new Set([
-  (process.env.QBIT_URL || "http://192.168.1.27:8085").replace(/\/+$/, ""),
-  (process.env.QBIT_URL_EXT || "https://qbittorrent.miraclestar.fnos.net").replace(/\/+$/, "")
+  normalizeBaseUrl(process.env.QBIT_URL || "http://192.168.1.27:8085"),
+  normalizeBaseUrl(process.env.QBIT_URL_EXT)
 ].filter(Boolean))];
 const qbitUsername = process.env.QBIT_USERNAME || "admin";
 const qbitPassword = process.env.QBIT_PASSWORD || "admin";
+const qbitTimeoutMs = readIntEnv("QBIT_TIMEOUT_MS", 8000, { min: 1000, max: 120000 });
+const appInfoTtlMs = readIntEnv("APP_INFO_TTL_MS", 60 * 60 * 1000, { min: 60_000, max: 24 * 60 * 60 * 1000 });
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -58,10 +78,10 @@ class QbitClient {
     });
     const response = await this.rawFetch("/api/v2/auth/login", {
       method: "POST",
-      headers: {
+      headers: (baseUrl) => ({
         "Content-Type": "application/x-www-form-urlencoded",
-        Referer: `${this.baseUrl}/`
-      },
+        Referer: `${baseUrl}/`
+      }),
       body
     });
     const text = await response.text();
@@ -78,15 +98,17 @@ class QbitClient {
   }
 
   async rawFetch(apiPath, options = {}) {
-    const timeout = Number(process.env.QBIT_TIMEOUT_MS || 8000);
     const candidates = [this.baseUrl, ...this.urls.filter((url) => url !== this.baseUrl)];
     let lastError;
+    const { headers: optionHeaders, ...fetchOptions } = options;
     for (const baseUrl of candidates) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
+      const timer = setTimeout(() => controller.abort(), qbitTimeoutMs);
       try {
+        const headers = typeof optionHeaders === "function" ? optionHeaders(baseUrl) : optionHeaders;
         const response = await fetch(`${baseUrl}${apiPath}`, {
-          ...options,
+          ...fetchOptions,
+          headers,
           signal: controller.signal
         });
         if (response.ok || (response.status >= 400 && response.status < 500)) {
@@ -121,11 +143,11 @@ class QbitClient {
 
   async request(apiPath, options = {}, retry = true) {
     await this.ensureLogin();
-    const headers = {
-      Referer: `${this.baseUrl}/`,
+    const headers = (baseUrl) => ({
+      Referer: `${baseUrl}/`,
       Cookie: `SID=${this.sid}`,
       ...(options.headers || {})
-    };
+    });
     const response = await this.rawFetch(apiPath, {
       ...options,
       headers
@@ -183,7 +205,6 @@ class QbitClient {
 const qbit = new QbitClient(qbitUrls, qbitUsername, qbitPassword);
 const trafficBaselinePath = path.resolve(__dirname, "../.mimocode/traffic-baseline.json");
 const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.TZ || "Asia/Shanghai" });
-const appInfoTtlMs = Math.max(60_000, Number(process.env.APP_INFO_TTL_MS || 60 * 60 * 1000));
 let appInfoCache = null;
 let dashboardServerState = {};
 let dashboardInitialized = false;
@@ -257,6 +278,35 @@ function hashField(hashes) {
     throw new QbitError("种子 Hash 格式无效", 400);
   }
   return values.join("|");
+}
+
+function textField(value, label, { max = 500, trim = true } = {}) {
+  if (value === undefined || value === null) return "";
+  const text = trim ? String(value).trim() : String(value);
+  if (text.length > max) {
+    throw new QbitError(`${label} 不能超过 ${max} 个字符`, 400);
+  }
+  return text;
+}
+
+function limitField(value, label) {
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit < 0) {
+    throw new QbitError(`${label} 必须是非负数字`, 400);
+  }
+  return Math.floor(limit);
+}
+
+function torrentUrlsField(value) {
+  const text = textField(value, "种子链接", { max: 100_000 });
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) {
+    throw new QbitError("请填写磁力链接、种子 URL 或本地可访问 URL", 400);
+  }
+  if (lines.length > 200) {
+    throw new QbitError("单次最多添加 200 条种子链接", 400);
+  }
+  return lines.join("\n");
 }
 
 async function getAppInfo() {
@@ -337,11 +387,11 @@ app.get("/api/dashboard", async (request, response, next) => {
       fullUpdate: Boolean(syncData.full_update),
       torrents: syncData.torrents || {},
       torrentsRemoved: syncData.torrents_removed || [],
-      categories: syncData.categories,
+      categories: syncData.categories || {},
       categoriesRemoved: syncData.categories_removed || [],
-      tags: syncData.tags,
+      tags: syncData.tags || [],
       tagsRemoved: syncData.tags_removed || [],
-      serverState: syncData.server_state || {},
+      serverState: dashboardServerState,
       daily: getDailyStats(dashboardServerState, dashboardServerState)
     });
   } catch (error) {
@@ -386,14 +436,11 @@ app.get("/api/tags", async (_request, response, next) => {
 app.post("/api/torrents/add", async (request, response, next) => {
   try {
     const { urls, category, tags, savepath, paused, skipChecking, sequentialDownload, firstLastPiecePrio } = request.body || {};
-    if (!urls || !String(urls).trim()) {
-      throw new QbitError("请填写磁力链接、种子 URL 或本地可访问 URL", 400);
-    }
     await qbit.postMultipart("/api/v2/torrents/add", {
-      urls: String(urls).trim(),
-      category,
-      tags,
-      savepath,
+      urls: torrentUrlsField(urls),
+      category: textField(category, "分类", { max: 200 }),
+      tags: textField(tags, "标签", { max: 500 }),
+      savepath: textField(savepath, "保存路径", { max: 1000 }),
       paused: paused ? "true" : "false",
       skip_checking: skipChecking ? "true" : "false",
       sequentialDownload: sequentialDownload ? "true" : "false",
@@ -428,13 +475,13 @@ app.post("/api/torrents/action", async (request, response, next) => {
     } else if (action === "reannounce") {
       await qbit.postForm("/api/v2/torrents/reannounce", { hashes: selected });
     } else if (action === "setCategory") {
-      await qbit.postForm("/api/v2/torrents/setCategory", { hashes: selected, category: category || "" });
+      await qbit.postForm("/api/v2/torrents/setCategory", { hashes: selected, category: textField(category, "分类", { max: 200 }) });
     } else if (action === "addTags") {
-      await qbit.postForm("/api/v2/torrents/addTags", { hashes: selected, tags: tags || "" });
+      await qbit.postForm("/api/v2/torrents/addTags", { hashes: selected, tags: textField(tags, "标签", { max: 500 }) });
     } else if (action === "setDlLimit") {
-      await qbit.postForm("/api/v2/torrents/setDownloadLimit", { hashes: selected, limit: Number(dlLimit || 0) });
+      await qbit.postForm("/api/v2/torrents/setDownloadLimit", { hashes: selected, limit: limitField(dlLimit ?? 0, "下载限速") });
     } else if (action === "setUpLimit") {
-      await qbit.postForm("/api/v2/torrents/setUploadLimit", { hashes: selected, limit: Number(upLimit || 0) });
+      await qbit.postForm("/api/v2/torrents/setUploadLimit", { hashes: selected, limit: limitField(upLimit ?? 0, "上传限速") });
     } else {
       throw new QbitError(`不支持的操作：${action}`, 400);
     }
@@ -448,10 +495,10 @@ app.post("/api/transfer/limits", async (request, response, next) => {
   try {
     const { dlLimit, upLimit } = request.body || {};
     if (dlLimit !== undefined) {
-      await qbit.postForm("/api/v2/transfer/setDownloadLimit", { limit: Number(dlLimit) });
+      await qbit.postForm("/api/v2/transfer/setDownloadLimit", { limit: limitField(dlLimit, "下载限速") });
     }
     if (upLimit !== undefined) {
-      await qbit.postForm("/api/v2/transfer/setUploadLimit", { limit: Number(upLimit) });
+      await qbit.postForm("/api/v2/transfer/setUploadLimit", { limit: limitField(upLimit, "上传限速") });
     }
     response.json({ ok: true });
   } catch (error) {
@@ -473,12 +520,16 @@ if (process.env.SERVE_STATIC === "true" || process.argv.includes("--static")) {
 }
 
 app.use((error, _request, response, _next) => {
-  const status = Number(error.status || 500);
-  response.status(status).json({
+  const rawStatus = Number(error.status || 500);
+  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+  const body = {
     ok: false,
-    message: error.message || "服务器错误",
-    details: error.details
-  });
+    message: error.message || "服务器错误"
+  };
+  if (status < 500 && error.details !== undefined) {
+    body.details = error.details;
+  }
+  response.status(status).json(body);
 });
 
 app.listen(port, "0.0.0.0", () => {
