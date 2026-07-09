@@ -1,6 +1,5 @@
-const CACHE = 'pt-qb-v1';
+const CACHE = 'pt-qb-v2';
 const PRECACHE = [
-  '/',
   '/index.html',
   '/manifest.json',
   '/icon-192.svg',
@@ -22,13 +21,29 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('/api/')) {
+  if (e.request.method !== 'GET') return;
+
+  const url = new URL(e.request.url);
+  if (url.pathname.startsWith('/api/')) return;
+
+  if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(e.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put('/index.html', copy));
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
     );
     return;
   }
+
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    caches.match(e.request).then(r => r || fetch(e.request).then(response => {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(e.request, copy));
+      return response;
+    }))
   );
 });

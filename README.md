@@ -2,6 +2,8 @@
 
 一个给 qBittorrent Web API 套的中文 PT 管理前端。前端跑在 Vite，后端 Express 负责登录 qBittorrent 并代理 `/api/*`，避免浏览器跨域问题。
 
+当前实际入口是根目录的 `index.html`。`src/` 目录是早期 React 原型，不参与当前 Vite 页面渲染；改页面和交互时优先修改 `index.html`。
+
 ## 启动
 
 ```powershell
@@ -15,9 +17,13 @@ npm run dev
 
 ```env
 QBIT_URL=http://192.168.1.27:8085
+# 可选备用地址，主地址不可达时尝试
+QBIT_URL_EXT=
 QBIT_USERNAME=admin
 QBIT_PASSWORD=admin
 PORT=8787
+QBIT_TIMEOUT_MS=8000
+APP_INFO_TTL_MS=3600000
 ```
 
 要改配置就复制 `.env.example` 为 `.env` 后编辑。
