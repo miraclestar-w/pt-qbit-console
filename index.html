@@ -1365,6 +1365,12 @@ let tagList = [];
 let allTorrents = [];
 let refreshInFlight = false;
 let refreshQueued = false;
+let dashboardRid = 0;
+let torrentMap = Object.create(null);
+let hasDashboardData = false;
+let lastTrackerEnrichAt = 0;
+const API_TIMEOUT_MS = 12000;
+const TRACKER_ENRICH_MS = 60000;
 
 document.documentElement.dataset.theme = theme;
 refresh();
@@ -1382,13 +1388,33 @@ document.getElementById('torrent-list').addEventListener('change', event => {
   if (input) toggle(input.dataset.toggleHash || '');
 });
 
-async function apiJson(url, init) {
-  const r = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) } });
-  if (!r.ok) {
-    const b = await r.json().catch(() => null);
-    throw new Error(b?.message || '请求失败: ' + r.status);
+async function apiJson(url, init = {}) {
+  const timeoutMs = Number.isFinite(init.timeoutMs) ? init.timeoutMs : API_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _ignoredTimeout, signal: _ignoredSignal, ...fetchInit } = init;
+  try {
+    const r = await fetch(url, {
+      ...fetchInit,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(fetchInit.headers || {}) }
+    });
+    if (!r.ok) {
+      const b = await r.json().catch(() => null);
+      throw new Error(b?.message || '请求失败: ' + r.status);
+    }
+    return r.json();
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('请求超时（>' + Math.round(timeoutMs / 1000) + 's），请检查 qB 地址或网络');
+    }
+    if (error instanceof TypeError) {
+      throw new Error('网络错误，后端可能未启动或代理不可达');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  return r.json();
 }
 
 function numberValue(value, fallback = 0) {
@@ -1541,7 +1567,7 @@ function setRefreshBusy(isBusy) {
   if (button) button.disabled = isBusy;
 }
 
-async function refresh(silent, queueIfBusy = !silent) {
+async function refresh(silent, queueIfBusy = !silent, forceFull = false) {
   if (refreshInFlight) {
     if (queueIfBusy) refreshQueued = true;
     return;
@@ -1549,37 +1575,32 @@ async function refresh(silent, queueIfBusy = !silent) {
   refreshInFlight = true;
   setRefreshBusy(true);
   try {
-    const [health, torrents, cats, tags] = await Promise.all([
-      apiJson('/api/health'),
-      apiJson('/api/torrents?sort=added_on&reverse=true'),
-      apiJson('/api/categories'),
-      apiJson('/api/tags')
-    ]);
-    allTorrents = torrents;
-    categories = cats;
-    categoryList = Object.keys(cats);
-    tagList = tags;
-    const knownHashes = new Set(torrents.map(t => t.hash).filter(Boolean));
+    if (forceFull) dashboardRid = 0;
+    const data = await apiJson('/api/dashboard?rid=' + encodeURIComponent(dashboardRid));
+    applyDashboardPayload(data);
+
+    const knownHashes = new Set(allTorrents.map(t => t.hash).filter(Boolean));
     selected = new Set([...selected].filter(hash => knownHashes.has(hash)));
 
-    document.getElementById('sidebar-url').textContent = health.qbitUrl;
-    document.getElementById('btn-webui').onclick = () => window.open(health.qbitUrl, '_blank');
+    const serverState = data.serverState || {};
+    document.getElementById('sidebar-url').textContent = data.qbitUrl || '-';
+    document.getElementById('btn-webui').onclick = () => window.open(data.qbitUrl, '_blank');
     document.getElementById('status-dot').classList.remove('offline');
-    document.getElementById('status-text').textContent = 'qB '+health.version;
+    document.getElementById('status-text').textContent = data.version ? ('qB ' + data.version) : '已连接';
     setAlert('');
 
-    document.getElementById('dl-speed').textContent = fmtSpeed(health.transfer.dl_info_speed);
-    document.getElementById('up-speed').textContent = fmtSpeed(health.transfer.up_info_speed);
-    document.getElementById('today-dl').textContent = fmtBytes(health.daily?.downloaded || 0);
-    document.getElementById('today-up').textContent = fmtBytes(health.daily?.uploaded || 0);
-    document.getElementById('disk-free').textContent = Number.isFinite(Number(health.serverState?.free_space_on_disk))
-      ? fmtBytes(Number(health.serverState.free_space_on_disk))
+    document.getElementById('dl-speed').textContent = fmtSpeed(serverState.dl_info_speed);
+    document.getElementById('up-speed').textContent = fmtSpeed(serverState.up_info_speed);
+    document.getElementById('today-dl').textContent = fmtBytes(data.daily?.downloaded || 0);
+    document.getElementById('today-up').textContent = fmtBytes(data.daily?.uploaded || 0);
+    document.getElementById('disk-free').textContent = Number.isFinite(Number(serverState.free_space_on_disk))
+      ? fmtBytes(Number(serverState.free_space_on_disk))
       : '-';
 
-    const stats = calcStats(torrents);
+    const stats = calcStats(allTorrents);
     document.getElementById('total-count').textContent = stats.total;
     document.getElementById('avg-ratio').textContent = stats.avgRatio;
-    document.getElementById('alert-count').textContent = stats.stalled+stats.error;
+    document.getElementById('alert-count').textContent = stats.stalled + stats.error;
 
     document.getElementById('badge-all').textContent = stats.total;
     document.getElementById('badge-dl').textContent = stats.downloading;
@@ -1588,15 +1609,31 @@ async function refresh(silent, queueIfBusy = !silent) {
     document.getElementById('badge-stall').textContent = stats.stalled;
     document.getElementById('badge-error').textContent = stats.error;
     document.getElementById('badge-done').textContent = stats.completed;
-    updateTrackers(torrents);
+    updateTrackers(allTorrents);
 
     updateCatSelect();
     render();
     updateBatch();
-  } catch(e) {
+    hasDashboardData = true;
+    void enrichTrackersIfNeeded(Boolean(forceFull || data.fullUpdate));
+  } catch (e) {
+    dashboardRid = 0;
     document.getElementById('status-dot').classList.add('offline');
-    document.getElementById('status-text').textContent = '连接失败';
-    setAlert(e.message || '连接失败');
+    document.getElementById('status-text').textContent = hasDashboardData ? '暂时离线' : '连接失败';
+    const tip = e.message || '连接失败';
+    if (!silent && !hasDashboardData) {
+      setAlert(tip);
+    } else if (!silent) {
+      setAlert('刷新失败（已保留上次数据）：' + tip);
+    } else if (!hasDashboardData) {
+      setAlert(tip);
+    } else {
+      // 静默轮询失败：仅在当前无告警时写一次，避免每 5s 刷屏
+      const alertEl = document.getElementById('alert-box');
+      if (alertEl && (!alertEl.textContent || alertEl.style.display === 'none')) {
+        setAlert('刷新失败（已保留上次数据）：' + tip);
+      }
+    }
   } finally {
     refreshInFlight = false;
     setRefreshBusy(false);
@@ -1604,6 +1641,94 @@ async function refresh(silent, queueIfBusy = !silent) {
       refreshQueued = false;
       refresh(true, false);
     }
+  }
+}
+
+function applyDashboardPayload(data) {
+  const incoming = data.torrents || {};
+  if (data.fullUpdate) {
+    torrentMap = Object.create(null);
+    for (const [hash, item] of Object.entries(incoming)) {
+      torrentMap[hash] = { ...(item || {}), hash: (item && item.hash) || hash };
+    }
+    categories = data.categories || {};
+    categoryList = Object.keys(categories);
+    tagList = Array.isArray(data.tags) ? data.tags.slice() : [];
+  } else {
+    for (const [hash, patch] of Object.entries(incoming)) {
+      const prev = torrentMap[hash] || { hash };
+      torrentMap[hash] = {
+        ...prev,
+        ...(patch || {}),
+        hash: (patch && patch.hash) || prev.hash || hash
+      };
+    }
+    for (const hash of data.torrentsRemoved || []) {
+      delete torrentMap[hash];
+    }
+    if (data.categories && typeof data.categories === 'object') {
+      categories = { ...categories, ...data.categories };
+    }
+    for (const name of data.categoriesRemoved || []) {
+      delete categories[name];
+    }
+    categoryList = Object.keys(categories);
+    if (Array.isArray(data.tags) && data.tags.length) {
+      const set = new Set(tagList);
+      data.tags.forEach((tag) => set.add(tag));
+      tagList = [...set];
+    }
+    if (Array.isArray(data.tagsRemoved) && data.tagsRemoved.length) {
+      const removed = new Set(data.tagsRemoved);
+      tagList = tagList.filter((tag) => !removed.has(tag));
+    }
+  }
+  dashboardRid = numberValue(data.rid, 0);
+  allTorrents = Object.values(torrentMap);
+}
+
+async function enrichTrackersIfNeeded(force = false) {
+  const now = Date.now();
+  if (!allTorrents.length) return;
+  if (!force && now - lastTrackerEnrichAt < TRACKER_ENRICH_MS) return;
+
+  const missing = allTorrents.filter((t) => !String(t.tracker || '').trim()).length;
+  const missingRatio = missing / allTorrents.length;
+  // maindata 常缺 tracker：缺失较多时立即补；否则仅周期补一次
+  if (!force && missingRatio < 0.25 && now - lastTrackerEnrichAt < TRACKER_ENRICH_MS * 3) return;
+
+  try {
+    const list = await apiJson('/api/torrents?sort=added_on&reverse=true', { timeoutMs: 15000 });
+    if (!Array.isArray(list)) return;
+    let changed = false;
+    for (const item of list) {
+      const hash = item && item.hash;
+      if (!hash || !torrentMap[hash]) continue;
+      const prev = torrentMap[hash];
+      const patch = {};
+      if (item.tracker && item.tracker !== prev.tracker) {
+        patch.tracker = item.tracker;
+      }
+      for (const key of ['num_complete', 'num_incomplete', 'num_seeds', 'num_leechs', 'magnet_uri']) {
+        if (item[key] != null && item[key] !== prev[key]) {
+          patch[key] = item[key];
+        }
+      }
+      if (Object.keys(patch).length) {
+        torrentMap[hash] = { ...prev, ...patch };
+        changed = true;
+      }
+    }
+    lastTrackerEnrichAt = now;
+    if (changed) {
+      allTorrents = Object.values(torrentMap);
+      updateTrackers(allTorrents);
+      render();
+    } else {
+      lastTrackerEnrichAt = now;
+    }
+  } catch (_) {
+    // 站点信息是增强项，失败不影响主刷新
   }
 }
 
@@ -1858,7 +1983,7 @@ async function runAction(action) {
       method: 'POST',
       body: JSON.stringify({ action, hashes: [...selected] })
     });
-    selected.clear(); updateBatch(); await refresh(true);
+    selected.clear(); updateBatch(); await refresh(true, false, true);
   } catch(e) { alert(e.message || '操作失败'); }
 }
 
@@ -1889,7 +2014,7 @@ async function addTorrent() {
         paused: document.getElementById('add-paused').checked
       })
     });
-    closeModal(); await refresh(true);
+    closeModal(); await refresh(true, false, true);
   } catch(e) { alert(e.message || '添加失败'); }
 }
 

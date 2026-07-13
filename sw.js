@@ -1,4 +1,4 @@
-const CACHE = 'pt-qb-v2';
+const CACHE = 'pt-qb-v3';
 const PRECACHE = [
   '/index.html',
   '/manifest.json',

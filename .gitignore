@@ -7,3 +7,11 @@ dist/
 npm-debug.log*
 vite.config.js
 vite.config.d.ts
+
+# Python / widget runtime
+__pycache__/
+*.py[cod]
+widget-web/.widget.lock
+
+# design reference dumps (not runtime assets)
+widget-web/*.png
