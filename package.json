@@ -8,7 +8,9 @@
     "client": "vite --host 0.0.0.0",
     "server": "node server/index.mjs",
     "build": "vite build",
-    "start": "node server/index.mjs --static"
+    "start": "node server/index.mjs --static",
+    "widget": "python widget-web/widget.py",
+    "server:static": "node server/index.mjs --static"
   },
   "dependencies": {
     "concurrently": "^9.2.1",

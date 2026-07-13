@@ -15,3 +15,6 @@ widget-web/.widget.lock
 
 # design reference dumps (not runtime assets)
 widget-web/*.png
+
+# runtime data (traffic baseline, etc.)
+data/

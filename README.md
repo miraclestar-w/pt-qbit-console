@@ -25,6 +25,17 @@
 - 系统托盘图标；任务栏按钮隐藏（Windows `ITaskbarList`）
 - 单实例锁，避免多开 WebView2
 
+
+## 性能与数据说明
+
+- **日流量基线** 写入 `data/traffic-baseline.json`（已 gitignore），不再使用 `.mimocode/`
+- **`/api/health`** 只拉 `transfer/info` + 缓存的 server state，避免对上千种子全量 `maindata?rid=0`
+- **`/api/dashboard`** 同 rid 请求会合并（coalesce），失败后重置 rid 强制下次全量同步
+- **URL 故障切换**：备用地址失败后有 30s 冷却，探测超时更短
+- **前端统计**：`calcStats` 单次遍历；平均分享率优先用 qB `global_ratio`
+- **Tracker 补全**：仅按缺失 hash 分批请求 `/api/torrents?hashes=...`，不再全量拉取
+- **桌面小组件**：启动时自动读取 `widget-web/.env` 与项目根目录 `.env`（不覆盖已有环境变量）
+
 ## 目录结构
 
 ```text
@@ -38,6 +49,7 @@
 │   ├── run_widget.pyw
 │   └── start_widget.vbs
 ├── package.json
+├── data/               # 运行时数据（gitignore）
 ├── .env.example
 └── README.md
 ```
@@ -103,7 +115,7 @@ python widget.py
 
 Windows 无控制台启动：双击 `start_widget.vbs` 或 `run_widget.pyw`。
 
-默认窗口：**280 × 214**。
+默认窗口：**按内容自适应高度**（宽度约 276px）。
 
 ## 主要 API（代理）
 
@@ -123,6 +135,8 @@ Windows 无控制台启动：双击 `start_widget.vbs` 或 `run_widget.pyw`。
 
 ```text
 npm run dev      # 同时启动 Express + Vite
+npm run widget   # 启动桌面小组件
+npm start        # 仅代理（可加 --static 提供 dist）
 npm run client   # 仅 Vite
 npm run server   # 仅 Express
 npm run build    # 构建到 dist/
@@ -138,3 +152,9 @@ npm start        # 生产：Express 静态托管 + API
 ## License
 
 Private / personal use.
+
+## 近期优化
+
+- Web 控制台：前台 5s / 后台 30s 轮询；种子列表虚拟滚动（只渲染可视区域）
+- 生产静态：`npm start` / `--static` 要求先有 `dist/`（否则直接退出）
+- 桌面小组件：窗口高度按内容自适应；离线显示原因；双击打开 WebUI

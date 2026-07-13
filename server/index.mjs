@@ -69,6 +69,8 @@ class QbitClient {
     this.sid = "";
     this.lastLoginAt = 0;
     this.loginPromise = null;
+    /** @type {Map<string, number>} url -> fail-until timestamp (ms) */
+    this.failedUntil = new Map();
   }
 
   async login() {
@@ -98,12 +100,22 @@ class QbitClient {
   }
 
   async rawFetch(apiPath, options = {}) {
-    const candidates = [this.baseUrl, ...this.urls.filter((url) => url !== this.baseUrl)];
+    const now = Date.now();
+    const ordered = [this.baseUrl, ...this.urls.filter((url) => url !== this.baseUrl)];
+    // Prefer healthy URLs; cooled-down failures last.
+    const candidates = [
+      ...ordered.filter((url) => (this.failedUntil.get(url) || 0) <= now),
+      ...ordered.filter((url) => (this.failedUntil.get(url) || 0) > now)
+    ];
     let lastError;
     const { headers: optionHeaders, ...fetchOptions } = options;
-    for (const baseUrl of candidates) {
+    for (let i = 0; i < candidates.length; i += 1) {
+      const baseUrl = candidates[i];
+      // Secondary / cooled-down URLs get a shorter probe timeout.
+      const isPrimary = baseUrl === this.baseUrl && (this.failedUntil.get(baseUrl) || 0) <= now;
+      const timeoutMs = isPrimary ? qbitTimeoutMs : Math.min(qbitTimeoutMs, 3500);
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), qbitTimeoutMs);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const headers = typeof optionHeaders === "function" ? optionHeaders(baseUrl) : optionHeaders;
         const response = await fetch(`${baseUrl}${apiPath}`, {
@@ -112,6 +124,7 @@ class QbitClient {
           signal: controller.signal
         });
         if (response.ok || (response.status >= 400 && response.status < 500)) {
+          this.failedUntil.delete(baseUrl);
           if (baseUrl !== this.baseUrl) {
             this.baseUrl = baseUrl;
             this.sid = "";
@@ -119,8 +132,10 @@ class QbitClient {
           }
           return response;
         }
+        this.failedUntil.set(baseUrl, now + 30_000);
         lastError = new QbitError(`qBittorrent responded ${response.status}`, response.status);
       } catch (error) {
+        this.failedUntil.set(baseUrl, now + 30_000);
         lastError = error?.name === "AbortError"
           ? new QbitError(`连接超时：${baseUrl}`, 504)
           : new QbitError(`无法连接：${error?.message || String(error)}`, 502);
@@ -130,6 +145,8 @@ class QbitClient {
     }
     throw lastError || new QbitError("所有 qBittorrent 地址均不可达", 502);
   }
+
+
 
   async ensureLogin() {
     if (this.sid && Date.now() - this.lastLoginAt <= 20 * 60 * 1000) return;
@@ -203,11 +220,13 @@ class QbitClient {
 }
 
 const qbit = new QbitClient(qbitUrls, qbitUsername, qbitPassword);
-const trafficBaselinePath = path.resolve(__dirname, "../.mimocode/traffic-baseline.json");
+const trafficBaselinePath = path.resolve(__dirname, "../data/traffic-baseline.json");
 const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.TZ || "Asia/Shanghai" });
 let appInfoCache = null;
 let dashboardServerState = {};
 let dashboardInitialized = false;
+/** @type {Map<number, Promise<any>>} concurrent dashboard requests by rid */
+const dashboardInflight = new Map();
 
 function todayKey() {
   return dayFormatter.format(new Date());
@@ -346,12 +365,22 @@ app.get("/api/config", (_request, response) => {
 
 app.get("/api/health", async (_request, response, next) => {
   try {
-    const [appInfo, transfer, syncData] = await Promise.all([
+    // Avoid full maindata?rid=0 (heavy with 1000+ torrents). Use transfer/info + cached server state.
+    const [appInfo, transfer] = await Promise.all([
       getAppInfo(),
-      qbit.json("/api/v2/transfer/info"),
-      qbit.json("/api/v2/sync/maindata?rid=0").catch(() => ({}))
+      qbit.json("/api/v2/transfer/info")
     ]);
-    const serverState = syncData.server_state || {};
+    const serverState = {
+      ...dashboardServerState,
+      dl_info_speed: transfer.dl_info_speed,
+      up_info_speed: transfer.up_info_speed,
+      dl_info_data: transfer.dl_info_data,
+      up_info_data: transfer.up_info_data,
+      alltime_dl: transfer.alltime_dl ?? dashboardServerState.alltime_dl,
+      alltime_ul: transfer.alltime_ul ?? dashboardServerState.alltime_ul,
+      global_ratio: transfer.global_ratio ?? dashboardServerState.global_ratio,
+      free_space_on_disk: transfer.free_space_on_disk ?? dashboardServerState.free_space_on_disk
+    };
     response.json({
       ok: true,
       qbitUrl: qbit.baseUrl,
@@ -370,31 +399,43 @@ app.get("/api/dashboard", async (request, response, next) => {
   try {
     const clientRid = requestedRid(request.query.rid);
     const rid = dashboardInitialized ? clientRid : 0;
-    const [appInfo, syncData] = await Promise.all([
-      getAppInfo(),
-      qbit.json(`/api/v2/sync/maindata?rid=${rid}`)
-    ]);
-    if (syncData.full_update) dashboardServerState = {};
-    Object.assign(dashboardServerState, syncData.server_state || {});
-    dashboardInitialized = true;
 
-    response.json({
-      ok: true,
-      qbitUrl: qbit.baseUrl,
-      version: appInfo.version,
-      apiVersion: appInfo.apiVersion,
-      rid: requestedRid(syncData.rid),
-      fullUpdate: Boolean(syncData.full_update),
-      torrents: syncData.torrents || {},
-      torrentsRemoved: syncData.torrents_removed || [],
-      categories: syncData.categories || {},
-      categoriesRemoved: syncData.categories_removed || [],
-      tags: syncData.tags || [],
-      tagsRemoved: syncData.tags_removed || [],
-      serverState: dashboardServerState,
-      daily: getDailyStats(dashboardServerState, dashboardServerState)
-    });
+    let inflight = dashboardInflight.get(rid);
+    if (!inflight) {
+      inflight = (async () => {
+        const [appInfo, syncData] = await Promise.all([
+          getAppInfo(),
+          qbit.json(`/api/v2/sync/maindata?rid=${rid}`)
+        ]);
+        if (syncData.full_update) dashboardServerState = {};
+        Object.assign(dashboardServerState, syncData.server_state || {});
+        dashboardInitialized = true;
+        return {
+          ok: true,
+          qbitUrl: qbit.baseUrl,
+          version: appInfo.version,
+          apiVersion: appInfo.apiVersion,
+          rid: requestedRid(syncData.rid),
+          fullUpdate: Boolean(syncData.full_update),
+          torrents: syncData.torrents || {},
+          torrentsRemoved: syncData.torrents_removed || [],
+          categories: syncData.categories || {},
+          categoriesRemoved: syncData.categories_removed || [],
+          tags: syncData.tags || [],
+          tagsRemoved: syncData.tags_removed || [],
+          serverState: dashboardServerState,
+          daily: getDailyStats(dashboardServerState, dashboardServerState)
+        };
+      })().finally(() => {
+        if (dashboardInflight.get(rid) === inflight) dashboardInflight.delete(rid);
+      });
+      dashboardInflight.set(rid, inflight);
+    }
+
+    response.json(await inflight);
   } catch (error) {
+    // Force full resync next time after hard failure (session drop, rid mismatch, etc.)
+    dashboardInitialized = false;
     next(error);
   }
 });
@@ -510,7 +551,8 @@ if (process.env.SERVE_STATIC === "true" || process.argv.includes("--static")) {
   const distPath = path.resolve(__dirname, "../dist");
   const indexPath = path.join(distPath, "index.html");
   if (!fs.existsSync(indexPath)) {
-    console.warn("[static] dist/index.html 不存在，请先运行 npm run build");
+    console.error("[static] dist/index.html 不存在，请先运行: npm run build");
+    process.exit(1);
   }
   app.use(express.static(distPath, { index: "index.html", dotfiles: "deny", fallthrough: true }));
   app.get(/^\/(?!api).*/, (_request, response, next) => {

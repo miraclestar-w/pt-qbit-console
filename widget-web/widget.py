@@ -29,6 +29,34 @@ except ImportError:
     print("Install with: pip install requests")
 
 
+def load_dotenv_files() -> None:
+    """Load KEY=VALUE from project .env files into os.environ (no overwrite).
+
+    Search order: widget-web/.env, then parent project .env (web console).
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [here / ".env", here.parent / ".env"]
+    for env_path in candidates:
+        try:
+            if not env_path.is_file():
+                continue
+            for raw in env_path.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                if not key or key in os.environ:
+                    continue
+                value = value.strip().strip("'").strip('"')
+                os.environ[key] = value
+        except OSError:
+            continue
+
+
+load_dotenv_files()
+
+
 def env_first(*names: str, default: str = "") -> str:
     """Read the first non-empty environment variable from names."""
     for name in names:
@@ -55,8 +83,12 @@ class Config:
     qb_pass: str = env_first("QBIT_PASSWORD", "QB_PASS", default="admin")
     update_interval: float = 2.0
     request_timeout: int = 10
-    window_width: int = 280
-    window_height: int = 214
+    window_width: int = 276
+    window_height: int = 320  # initial only; auto-fit to content after load
+    window_min_width: int = 240
+    window_max_width: int = 420
+    window_min_height: int = 180
+    window_max_height: int = 480
     debug: bool = env_first("QBIT_DEBUG", "QB_DEBUG", default="").lower() in ("1", "true", "yes")
 
     def __post_init__(self) -> None:
@@ -113,6 +145,7 @@ class QBittorrentClient:
         self.logger = logger
         self._logged_in = False
         self._lock = threading.Lock()
+        self._last_error: Optional[str] = None
 
         if USE_REQUESTS:
             self.session = requests.Session()
@@ -122,6 +155,21 @@ class QBittorrentClient:
             self.opener = urllib.request.build_opener(
                 urllib.request.HTTPCookieProcessor(self.cookie_jar)
             )
+
+    @staticmethod
+    def _classify_error(exc: BaseException) -> str:
+        msg = str(exc).lower()
+        if "timed out" in msg or "timeout" in msg:
+            return "连接超时"
+        if "refused" in msg or "10061" in msg or "actively refused" in msg:
+            return "连接被拒绝"
+        if "name or service" in msg or "getaddrinfo" in msg or "nodename" in msg or "11001" in msg:
+            return "主机名无法解析"
+        if "401" in msg or "403" in msg or "forbidden" in msg:
+            return "鉴权失败"
+        if "10054" in msg or "reset" in msg:
+            return "连接被重置"
+        return f"请求异常: {str(exc)[:48]}"
 
     def login(self) -> bool:
         with self._lock:
@@ -156,13 +204,16 @@ class QBittorrentClient:
 
                 self._logged_in = success
                 if success:
+                    self._last_error = None
                     self.logger.info("Login successful")
                 else:
+                    self._last_error = "登录失败（账号或密码错误）"
                     self.logger.warning("Login failed")
                 return success
             except Exception as e:
                 self.logger.error("Login error: %s", e)
                 self._logged_in = False
+                self._last_error = self._classify_error(e)
                 return False
 
     def _ensure_logged_in(self) -> bool:
@@ -181,15 +232,18 @@ class QBittorrentClient:
                     timeout=self.config.request_timeout
                 )
                 response.raise_for_status()
+                self._last_error = None
                 return response.json()
             req = urllib.request.Request(
                 f"{self.config.qb_url}{path}",
                 headers={"Referer": f"{self.config.qb_url}/"}
             )
             resp = self.opener.open(req, timeout=self.config.request_timeout)
+            self._last_error = None
             return json.loads(resp.read())
         except Exception as e:
             self.logger.debug("GET %s failed: %s", path, e)
+            self._last_error = self._classify_error(e)
             if retry_on_auth_fail:
                 self._logged_in = False
                 if self.login():
@@ -204,16 +258,49 @@ class QBittorrentClient:
 class WidgetApi:
     """JavaScript API exposed to the webview."""
 
-    def __init__(self, client: QBittorrentClient, logger: logging.Logger):
+    def __init__(self, client: QBittorrentClient, logger: logging.Logger, config: Optional["Config"] = None):
         self._client = client
         self._logger = logger
+        self._config = config
         self._window: Optional[Any] = None
         self._rid = 0
         self._torrents: Dict[str, Dict[str, Any]] = {}
         self._server_state: Dict[str, Any] = {}
+        self._last_free_space: Optional[int] = None
+        self._last_fit: tuple[int, int] = (0, 0)
 
     def set_window(self, window: Any) -> None:
         self._window = window
+
+    def fit_window(self, width: int = 0, height: int = 0) -> Dict[str, int]:
+        """Resize frameless window to measured HTML content size (called from JS)."""
+        if self._window is None:
+            return {"ok": 0}
+        cfg = self._config
+        min_w = getattr(cfg, "window_min_width", 240) if cfg else 240
+        max_w = getattr(cfg, "window_max_width", 420) if cfg else 420
+        min_h = getattr(cfg, "window_min_height", 180) if cfg else 180
+        max_h = getattr(cfg, "window_max_height", 480) if cfg else 480
+        pref_w = getattr(cfg, "window_width", 276) if cfg else 276
+        try:
+            w = int(width) if width else pref_w
+            h = int(height) if height else 0
+        except (TypeError, ValueError):
+            return {"ok": 0}
+        if h <= 0:
+            return {"ok": 0}
+        w = max(min_w, min(max_w, w))
+        h = max(min_h, min(max_h, h))
+        if (w, h) == self._last_fit:
+            return {"ok": 1, "w": w, "h": h, "skip": 1}
+        try:
+            self._window.resize(w, h)
+            self._last_fit = (w, h)
+            self._logger.debug("fit_window -> %sx%s", w, h)
+            return {"ok": 1, "w": w, "h": h}
+        except Exception as e:
+            self._logger.debug("fit_window failed: %s", e)
+            return {"ok": 0}
 
     def get_data(self) -> Dict[str, Any]:
         """Fetch stats via sync/maindata (incremental when possible)."""
@@ -222,7 +309,11 @@ class WidgetApi:
             self._rid = 0
             self._torrents = {}
             self._server_state = {}
-            return {"online": False}
+            self._last_free_space = None
+            return {
+                "online": False,
+                "reason": self._client._last_error or "无法获取数据",
+            }
 
         full_update = bool(main_data.get("full_update"))
         if full_update:
@@ -256,7 +347,10 @@ class WidgetApi:
         if not ss and not torrents and not full_update:
             # empty partial after a cold start without usable state
             self._rid = 0
-            return {"online": False}
+            return {
+                "online": False,
+                "reason": self._client._last_error or "等待服务端状态",
+            }
 
         stats = self._analyze_torrents(torrents)
         dl_speed = int(ss.get("dl_info_speed") or 0)
@@ -282,6 +376,11 @@ class WidgetApi:
             free_space = int(free_space) if free_space is not None else None
         except (TypeError, ValueError):
             free_space = None
+        if free_space is not None and free_space >= 0:
+            self._last_free_space = free_space
+        elif self._last_free_space is not None:
+            # partial maindata sometimes omits free_space_on_disk
+            free_space = self._last_free_space
 
         # Global share ratio from server_state (same as WebUI). Fall back to
         # alltime_ul/alltime_dl, then average of torrent ratios.
@@ -604,7 +703,7 @@ def main() -> int:
         return 1
 
     client = QBittorrentClient(config, logger)
-    api = WidgetApi(client, logger)
+    api = WidgetApi(client, logger, config)
     api._tray_icon = None
 
     window = webview.create_window(
@@ -624,20 +723,54 @@ def main() -> int:
 
     ready_once = {"done": False}
 
+    def _measure_and_fit() -> None:
+        """Measure #widget content height in the page and resize window to fit."""
+        try:
+            size = window.evaluate_js(
+                """
+                (function () {
+                  var el = document.getElementById('widget');
+                  if (!el) return null;
+                  el.style.height = 'auto';
+                  var r = el.getBoundingClientRect();
+                  var w = Math.ceil(Math.max(el.scrollWidth, el.offsetWidth, r.width || 0));
+                  var h = Math.ceil(Math.max(el.scrollHeight, el.offsetHeight, r.height || 0));
+                  var dpr = window.devicePixelRatio || 1;
+                  var pad = dpr >= 1.5 ? 14 : (dpr > 1.1 ? 12 : 10);
+                  return {w: w, h: h + pad};
+                })()
+                """
+            )
+            if isinstance(size, str):
+                size = json.loads(size)
+            if not isinstance(size, dict):
+                return
+            api.fit_window(size.get("w") or config.window_width, size.get("h") or 0)
+        except Exception as e:
+            logger.debug("measure_and_fit: %s", e)
+
     def after_window_ready():
         """Called when page is loaded — WebView2 is fully up."""
         if ready_once["done"]:
             return
         ready_once["done"] = True
-        logger.info("Window loaded — enabling tray / taskbar hide")
+        logger.info("Window loaded — auto-fit + tray / taskbar hide")
         try:
-            # Make sure visible first
             window.show()
         except Exception:
             pass
-        # Small delay so first paint finishes before mutating form flags
+        try:
+            _measure_and_fit()
+        except Exception as e:
+            logger.debug("initial fit: %s", e)
+
         def late():
-            time.sleep(0.8)
+            for delay in (0.15, 0.4, 0.85):
+                time.sleep(delay)
+                try:
+                    _measure_and_fit()
+                except Exception as e:
+                    logger.debug("late fit: %s", e)
             try:
                 _hide_from_taskbar(logger)
             except Exception as e:
@@ -646,6 +779,7 @@ def main() -> int:
                 _start_tray(api, window, logger)
             except Exception as e:
                 logger.error("tray: %s", e)
+
         threading.Thread(target=late, daemon=True, name="tray-late").start()
 
     try:

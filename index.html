@@ -655,12 +655,16 @@
       grid-template-columns: var(--torrent-cols);
       gap: 10px;
       align-items: center;
+      height: 62px;
       min-height: 62px;
+      max-height: 62px;
       padding: 8px 14px;
       border-bottom: 1px solid var(--border);
       border-left: 3px solid transparent;
       transition: background 0.1s, box-shadow 0.1s;
+      overflow: hidden;
     }
+    .virt-spacer { flex-shrink: 0; pointer-events: none; }
     .t-row:last-child { border-bottom: none; }
     .t-row:hover { background: var(--card-hover); }
     .t-row.selected { background: var(--accent-bg); }
@@ -1373,8 +1377,31 @@ const API_TIMEOUT_MS = 12000;
 const TRACKER_ENRICH_MS = 60000;
 
 document.documentElement.dataset.theme = theme;
+
+// 前台 5s / 后台 30s；上一轮结束后再 schedule，避免固定 interval 叠加感
+let pollTimer = null;
+const POLL_MS_VISIBLE = 5000;
+const POLL_MS_HIDDEN = 30000;
+function schedulePoll() {
+  if (pollTimer) clearTimeout(pollTimer);
+  const ms = document.hidden ? POLL_MS_HIDDEN : POLL_MS_VISIBLE;
+  pollTimer = setTimeout(async () => {
+    try {
+      await refresh(true, false);
+    } catch (_) {
+      /* refresh 内部已处理 */
+    }
+    schedulePoll();
+  }, ms);
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    refresh(true, false);
+  }
+  schedulePoll();
+});
 refresh();
-setInterval(() => refresh(true, false), 5000);
+schedulePoll();
 
 document.getElementById('tracker-list').addEventListener('click', event => {
   const target = event.target instanceof Element ? event.target : event.target.parentElement;
@@ -1597,7 +1624,7 @@ async function refresh(silent, queueIfBusy = !silent, forceFull = false) {
       ? fmtBytes(Number(serverState.free_space_on_disk))
       : '-';
 
-    const stats = calcStats(allTorrents);
+    const stats = calcStats(allTorrents, serverState);
     document.getElementById('total-count').textContent = stats.total;
     document.getElementById('avg-ratio').textContent = stats.avgRatio;
     document.getElementById('alert-count').textContent = stats.stalled + stats.error;
@@ -1692,31 +1719,53 @@ async function enrichTrackersIfNeeded(force = false) {
   if (!allTorrents.length) return;
   if (!force && now - lastTrackerEnrichAt < TRACKER_ENRICH_MS) return;
 
-  const missing = allTorrents.filter((t) => !String(t.tracker || '').trim()).length;
-  const missingRatio = missing / allTorrents.length;
+  const missingList = allTorrents.filter((t) => t.hash && !String(t.tracker || '').trim());
+  const missingRatio = missingList.length / allTorrents.length;
   // maindata 常缺 tracker：缺失较多时立即补；否则仅周期补一次
   if (!force && missingRatio < 0.25 && now - lastTrackerEnrichAt < TRACKER_ENRICH_MS * 3) return;
 
   try {
-    const list = await apiJson('/api/torrents?sort=added_on&reverse=true', { timeoutMs: 15000 });
-    if (!Array.isArray(list)) return;
+    // Batch only missing hashes (or a sample on force) — avoid full /api/torrents for 1000+ torrents
+    let hashes = missingList.map((t) => t.hash);
+    if (force && hashes.length < Math.min(80, allTorrents.length)) {
+      // On full refresh also sample a few known torrents to refresh seed/leech counts
+      const extras = allTorrents
+        .filter((t) => t.hash && String(t.tracker || '').trim())
+        .slice(0, 40)
+        .map((t) => t.hash);
+      hashes = [...new Set([...hashes, ...extras])];
+    }
+    if (!hashes.length) {
+      lastTrackerEnrichAt = now;
+      return;
+    }
+    // Cap batch size to keep URL/query reasonable
+    const BATCH = 120;
     let changed = false;
-    for (const item of list) {
-      const hash = item && item.hash;
-      if (!hash || !torrentMap[hash]) continue;
-      const prev = torrentMap[hash];
-      const patch = {};
-      if (item.tracker && item.tracker !== prev.tracker) {
-        patch.tracker = item.tracker;
-      }
-      for (const key of ['num_complete', 'num_incomplete', 'num_seeds', 'num_leechs', 'magnet_uri']) {
-        if (item[key] != null && item[key] !== prev[key]) {
-          patch[key] = item[key];
+    for (let i = 0; i < hashes.length; i += BATCH) {
+      const chunk = hashes.slice(i, i + BATCH);
+      const list = await apiJson(
+        '/api/torrents?hashes=' + encodeURIComponent(chunk.join('|')),
+        { timeoutMs: 12000 }
+      );
+      if (!Array.isArray(list)) continue;
+      for (const item of list) {
+        const hash = item && item.hash;
+        if (!hash || !torrentMap[hash]) continue;
+        const prev = torrentMap[hash];
+        const patch = {};
+        if (item.tracker && item.tracker !== prev.tracker) {
+          patch.tracker = item.tracker;
         }
-      }
-      if (Object.keys(patch).length) {
-        torrentMap[hash] = { ...prev, ...patch };
-        changed = true;
+        for (const key of ['num_complete', 'num_incomplete', 'num_seeds', 'num_leechs', 'magnet_uri']) {
+          if (item[key] != null && item[key] !== prev[key]) {
+            patch[key] = item[key];
+          }
+        }
+        if (Object.keys(patch).length) {
+          torrentMap[hash] = { ...prev, ...patch };
+          changed = true;
+        }
       }
     }
     lastTrackerEnrichAt = now;
@@ -1724,25 +1773,46 @@ async function enrichTrackersIfNeeded(force = false) {
       allTorrents = Object.values(torrentMap);
       updateTrackers(allTorrents);
       render();
-    } else {
-      lastTrackerEnrichAt = now;
     }
   } catch (_) {
     // 站点信息是增强项，失败不影响主刷新
   }
 }
 
-function calcStats(torrents) {
-  const done = torrents.filter(t=>numberValue(t.progress)>=1);
+
+
+function calcStats(torrents, serverState = {}) {
+  let downloading = 0, seeding = 0, paused = 0, stalled = 0, error = 0, completed = 0;
+  let ratioSum = 0;
+  for (const t of torrents) {
+    const kind = statusKind(t);
+    if (kind === 'downloading') downloading += 1;
+    else if (kind === 'seeding') seeding += 1;
+    else if (kind === 'paused') paused += 1;
+    else if (kind === 'stalled') stalled += 1;
+    else if (kind === 'error') error += 1;
+    if (numberValue(t.progress) >= 1) {
+      completed += 1;
+      ratioSum += numberValue(t.ratio);
+    }
+  }
+  // Prefer qB global_ratio (matches WebUI); fallback to completed-torrent average.
+  const globalRatio = Number(serverState.global_ratio);
+  let avgRatio = '0.00';
+  if (Number.isFinite(globalRatio) && globalRatio >= 0) {
+    avgRatio = globalRatio.toFixed(2);
+  } else if (completed) {
+    avgRatio = (ratioSum / completed).toFixed(2);
+  }
   return {
     total: torrents.length,
-    downloading: torrents.filter(t=>statusKind(t)==='downloading').length,
-    seeding: torrents.filter(t=>statusKind(t)==='seeding').length,
-    paused: torrents.filter(t=>statusKind(t)==='paused').length,
-    stalled: torrents.filter(t=>statusKind(t)==='stalled').length,
-    error: torrents.filter(t=>statusKind(t)==='error').length,
-    completed: done.length,
-    avgRatio: done.length ? (done.reduce((s,t)=>s+numberValue(t.ratio),0)/done.length).toFixed(2) : '0.00'
+    downloading,
+    seeding,
+    paused,
+    stalled,
+    error,
+    completed,
+    avgRatio
   };
 }
 
@@ -1864,6 +1934,116 @@ function trackerIssueText(t, kind) {
   return '';
 }
 
+function torrentRowHtml(t) {
+  const h = tHealth(t);
+  const dotCls = {good:'dot-good',warn:'dot-warn',bad:'dot-bad'}[h] || 'dot-neutral';
+  const kind = statusKind(t);
+  const stateCls = kind !== 'all' ? 'state-'+kind : '';
+  const status = statusText[t.state] || t.state;
+  const pct = Math.max(0, Math.min(100, numberValue(t.progress)*100));
+  const checked = selected.has(t.hash);
+  const progressCls = progressTone(t, pct);
+  const trackerCls = trackerColorClass(t.tracker);
+  const trackerShort = getTrackerShort(t.tracker);
+  const trackerIssue = trackerIssueText(t, kind);
+  const hashShort = t.hash ? t.hash.substring(0,6)+'...'+t.hash.substring(t.hash.length-4) : '';
+  const ratio = numberValue(t.ratio);
+
+  let ratioCls = 'neutral';
+  if (numberValue(t.progress) >= 1) {
+    if (ratio >= 2) ratioCls = 'good';
+    else if (ratio >= 1) ratioCls = 'good';
+    else if (ratio >= 0.5) ratioCls = 'warn';
+    else ratioCls = 'bad';
+  }
+
+  let statusSub = '';
+  if (kind === 'downloading') {
+    statusSub = 'ETA '+fmtEta(t.eta);
+  } else if (kind === 'seeding') {
+    statusSub = '剩余 '+fmtBytes(t.amount_left);
+  } else if (kind === 'error') {
+    statusSub = '需处理';
+  } else if (kind === 'stalled') {
+    statusSub = '无连接';
+  }
+
+  return '<div class="t-row '+stateCls+(checked?' selected':'')+'" data-hash="'+esc(t.hash)+'">'
+    + '<div class="t-check"><input type="checkbox" class="check" data-toggle-hash="'+esc(t.hash)+'"'+(checked?' checked':'')+' /></div>'
+    + '<div class="t-status">'
+      + '<div class="main-text" style="color:var(--'+(kind==='error'?'red':kind==='stalled'?'orange':kind==='downloading'?'blue':'text-2')+')">'+esc(status)+'</div>'
+      + '<div class="sub-text">'+(statusSub || fmtEta(t.eta))+'</div>'
+    + '</div>'
+    + '<div class="t-main">'
+      + '<div class="t-name"><span class="title" title="'+esc(t.name)+'">'+esc(t.name)+'</span></div>'
+      + '<div class="t-info">'
+        + (trackerShort ? '<span class="tracker-badge '+trackerCls+'">'+esc(trackerShort)+'</span>' : '')
+        + '<span class="meta-hash">Hash: '+esc(hashShort)+'</span>'
+        + (trackerIssue ? '<span class="tracker-error" title="Tracker: '+esc(trackerIssue)+'">Tracker: '+esc(trackerIssue)+'</span>' : '')
+      + '</div>'
+    + '</div>'
+    + '<div class="t-progress-cell">'
+      + '<span class="t-progress-percent '+progressCls+'">'+pct.toFixed(pct >= 100 ? 0 : 1)+'%</span>'
+      + '<div class="t-progress '+progressCls+'"><span class="t-progress-fill '+progressCls+'" style="width:'+pct+'%"></span></div>'
+    + '</div>'
+    + '<div class="t-peers">'+formatPeers(t)+'</div>'
+    + '<div class="t-size">'+fmtBytes(t.size)+'</div>'
+    + '<div class="t-speed '+(numberValue(t.upspeed)>0?'up':'idle')+'">↑ '+fmtSpeed(t.upspeed)+'</div>'
+    + '<div class="t-speed '+(numberValue(t.dlspeed)>0?'down':'idle')+'">↓ '+fmtSpeed(t.dlspeed)+'</div>'
+    + '<div class="t-ratio"><span class="'+ratioCls+'">'+ratio.toFixed(2)+'</span></div>'
+  + '</div>';
+}
+
+const TORRENT_ROW_H = 62;
+const TORRENT_OVERSCAN = 6;
+let virtualScrollBound = false;
+let virtRaf = 0;
+
+function ensureVirtualScroll(list) {
+  if (virtualScrollBound || !list) return;
+  virtualScrollBound = true;
+  list.addEventListener('scroll', () => {
+    if (virtRaf) return;
+    virtRaf = requestAnimationFrame(() => {
+      virtRaf = 0;
+      renderVirtualList(true);
+    });
+  }, { passive: true });
+}
+
+function renderVirtualList(fromScroll) {
+  const list = document.getElementById('torrent-list');
+  const visible = list && list._virtVisible;
+  if (!list || !visible || !visible.length) return;
+
+  const total = visible.length;
+  const scrollTop = list.scrollTop;
+  const viewH = list.clientHeight || 480;
+  let start = Math.floor(scrollTop / TORRENT_ROW_H) - TORRENT_OVERSCAN;
+  if (start < 0) start = 0;
+  let end = Math.ceil((scrollTop + viewH) / TORRENT_ROW_H) + TORRENT_OVERSCAN;
+  if (end > total) end = total;
+
+  // 滚动时若窗口未变且非强制，可跳过（数据刷新走 render→force）
+  const rangeKey = start + ':' + end + ':' + total;
+  if (fromScroll && list._virtRangeKey === rangeKey && list._virtDataSeq === list._virtPaintSeq) {
+    return;
+  }
+  list._virtRangeKey = rangeKey;
+  list._virtPaintSeq = list._virtDataSeq;
+
+  const topH = start * TORRENT_ROW_H;
+  const botH = Math.max(0, (total - end) * TORRENT_ROW_H);
+  let html = '';
+  if (topH > 0) html += '<div class="virt-spacer" style="height:' + topH + 'px" aria-hidden="true"></div>';
+  for (let i = start; i < end; i++) html += torrentRowHtml(visible[i]);
+  if (botH > 0) html += '<div class="virt-spacer" style="height:' + botH + 'px" aria-hidden="true"></div>';
+  // 保持滚动位置：仅替换 innerHTML 时浏览器通常保留 scrollTop
+  const keep = list.scrollTop;
+  list.innerHTML = html;
+  if (Math.abs(list.scrollTop - keep) > 1) list.scrollTop = keep;
+}
+
 function render() {
   const visible = getVisibleTorrents();
   const checkAll = document.getElementById('check-all');
@@ -1874,70 +2054,18 @@ function render() {
 
   document.getElementById('table-count').textContent = '当前 '+visible.length+' 个' + (trackerFilter==='all' ? '' : ' · '+trackerFilter);
   const list = document.getElementById('torrent-list');
+  ensureVirtualScroll(list);
   if (!visible.length) {
+    list._virtVisible = null;
+    list._virtRangeKey = '';
     list.innerHTML = '<div class="empty">没有匹配的种子</div>';
     return;
   }
-  list.innerHTML = visible.map(t => {
-    const h = tHealth(t);
-    const dotCls = {good:'dot-good',warn:'dot-warn',bad:'dot-bad'}[h] || 'dot-neutral';
-    const kind = statusKind(t);
-    const stateCls = kind !== 'all' ? 'state-'+kind : '';
-    const status = statusText[t.state] || t.state;
-    const pct = Math.max(0, Math.min(100, numberValue(t.progress)*100));
-    const checked = selected.has(t.hash);
-    const progressCls = progressTone(t, pct);
-    const trackerCls = trackerColorClass(t.tracker);
-    const trackerShort = getTrackerShort(t.tracker);
-    const trackerIssue = trackerIssueText(t, kind);
-    const hashShort = t.hash ? t.hash.substring(0,6)+'...'+t.hash.substring(t.hash.length-4) : '';
-    const ratio = numberValue(t.ratio);
-
-    let ratioCls = 'neutral';
-    if (numberValue(t.progress) >= 1) {
-      if (ratio >= 2) ratioCls = 'good';
-      else if (ratio >= 1) ratioCls = 'good';
-      else if (ratio >= 0.5) ratioCls = 'warn';
-      else ratioCls = 'bad';
-    }
-
-    let statusSub = '';
-    if (kind === 'downloading') {
-      statusSub = 'ETA '+fmtEta(t.eta);
-    } else if (kind === 'seeding') {
-      statusSub = '剩余 '+fmtBytes(t.amount_left);
-    } else if (kind === 'error') {
-      statusSub = '需处理';
-    } else if (kind === 'stalled') {
-      statusSub = '无连接';
-    }
-
-    return '<div class="t-row '+stateCls+(checked?' selected':'')+'" data-hash="'+esc(t.hash)+'">'
-      + '<div class="t-check"><input type="checkbox" class="check" data-toggle-hash="'+esc(t.hash)+'"'+(checked?' checked':'')+' /></div>'
-      + '<div class="t-status">'
-        + '<div class="main-text" style="color:var(--'+(kind==='error'?'red':kind==='stalled'?'orange':kind==='downloading'?'blue':'text-2')+')">'+esc(status)+'</div>'
-        + '<div class="sub-text">'+(statusSub || fmtEta(t.eta))+'</div>'
-      + '</div>'
-      + '<div class="t-main">'
-        + '<div class="t-name"><span class="title" title="'+esc(t.name)+'">'+esc(t.name)+'</span></div>'
-        + '<div class="t-info">'
-          + (trackerShort ? '<span class="tracker-badge '+trackerCls+'">'+esc(trackerShort)+'</span>' : '')
-          + '<span class="meta-hash">Hash: '+esc(hashShort)+'</span>'
-          + (trackerIssue ? '<span class="tracker-error" title="Tracker: '+esc(trackerIssue)+'">Tracker: '+esc(trackerIssue)+'</span>' : '')
-        + '</div>'
-      + '</div>'
-      + '<div class="t-progress-cell">'
-        + '<span class="t-progress-percent '+progressCls+'">'+pct.toFixed(pct >= 100 ? 0 : 1)+'%</span>'
-        + '<div class="t-progress '+progressCls+'"><span class="t-progress-fill '+progressCls+'" style="width:'+pct+'%"></span></div>'
-      + '</div>'
-      + '<div class="t-peers">'+formatPeers(t)+'</div>'
-      + '<div class="t-size">'+fmtBytes(t.size)+'</div>'
-      + '<div class="t-speed '+(numberValue(t.upspeed)>0?'up':'idle')+'">↑ '+fmtSpeed(t.upspeed)+'</div>'
-      + '<div class="t-speed '+(numberValue(t.dlspeed)>0?'down':'idle')+'">↓ '+fmtSpeed(t.dlspeed)+'</div>'
-      + '<div class="t-ratio"><span class="'+ratioCls+'">'+ratio.toFixed(2)+'</span></div>'
-    + '</div>';
-  }).join('');
+  list._virtVisible = visible;
+  list._virtDataSeq = (list._virtDataSeq || 0) + 1;
+  renderVirtualList(false);
 }
+
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, ch => ({

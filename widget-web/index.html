@@ -6,167 +6,285 @@
 <title>qBitWidget</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 :root {
-  --bg0: #0a0d12;
-  --bg1: #10151c;
-  --card: rgba(255,255,255,0.035);
-  --stroke: rgba(180, 205, 230, 0.12);
-  --text: #edf2f7;
-  --muted: #7b8d9e;
-  --soft: #5b6c7c;
+  --bg: #0a0f16;
+  --line: rgba(150,175,200,.14);
+  --soft: rgba(255,255,255,.045);
+  --text: #eef3f8;
+  --mute: #8a9bab;
+  --dim: #5c7084;
   --dl: #ff6b7a;
-  --ul: #3ee08a;
-  --seed: #5bc0ff;
-  --stop: #f0c14a;
-  --err: #ff7ab6;
+  --ul: #3dde8a;
+  --seed: #4fb8ff;
+  --stop: #efc15a;
+  --err: #ff7ab8;
+  --disk: #7ec8ff;
 }
-
 html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: transparent; color: var(--text);
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
   font-family: "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
-  user-select: none; -webkit-user-select: none; cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: move;
 }
-
+/* height:auto — 按内容撑开，再由 Python 自适应窗口 */
 .widget {
-  position: relative; width: 100%; height: 100%;
-  display: grid; grid-template-rows: auto auto auto 1fr auto;
-  gap: 9px; padding: 11px 11px 10px; border-radius: 14px;
-  border: 1px solid var(--stroke); overflow: hidden;
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  overflow: hidden;
   background:
-    radial-gradient(120% 90% at 0% 0%, rgba(255, 107, 122, 0.10), transparent 42%),
-    radial-gradient(120% 90% at 100% 0%, rgba(62, 224, 138, 0.08), transparent 40%),
-    linear-gradient(165deg, #141b24 0%, var(--bg0) 70%);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 28px rgba(0,0,0,0.45);
-  transition: opacity 0.15s ease, filter 0.2s ease;
+    radial-gradient(120% 90% at 0% 0%, rgba(255,107,122,.15), transparent 46%),
+    radial-gradient(100% 80% at 100% 0%, rgba(61,222,138,.12), transparent 44%),
+    linear-gradient(165deg, #151c27 0%, var(--bg) 72%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 12px 26px rgba(0,0,0,.45);
+  position: relative;
 }
-.widget::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,0.035), transparent 28%);
+.widget::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,.035), transparent 24%);
 }
-.widget.offline { filter: saturate(0.45) brightness(0.92); }
+.widget.offline { filter: saturate(.42) brightness(.88); }
+.z { position: relative; z-index: 1; flex: 0 0 auto; }
 
-.hd { position: relative; z-index: 1; display: flex; align-items: center; gap: 8px; min-height: 18px; }
-#statusDot.live { width: 8px; height: 8px; border-radius: 50%; background: var(--soft); flex: 0 0 auto; display: inline-block; }
-#statusDot.live.on { background: var(--ul); box-shadow: 0 0 0 3px rgba(62, 224, 138, 0.14), 0 0 10px rgba(62, 224, 138, 0.55); }
-.brand { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #dce8f2; line-height: 1; }
-.badge { margin-left: auto; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: var(--muted);
-  padding: 3px 7px; border-radius: 999px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.05); line-height: 1; }
+.hd {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 16px;
+}
+.live {
+  width: 7px; height: 7px; border-radius: 50%; background: #4a5a6a; flex: 0 0 auto;
+}
+.live.on {
+  background: var(--ul);
+  box-shadow: 0 0 0 3px rgba(61,222,138,.14), 0 0 8px rgba(61,222,138,.4);
+}
+.brand {
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; color: #d8e5f1; line-height: 1;
+}
+.badge {
+  margin-left: auto; font-size: 10px; font-weight: 650; color: var(--mute);
+  padding: 2px 7px; border-radius: 999px; border: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.035); line-height: 1.2;
+}
 
-.hero { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.lane { min-width: 0; padding: 8px 9px 7px; border-radius: 11px; background: var(--card); border: 1px solid rgba(255,255,255,0.045); }
-.lane .tag { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); line-height: 1; }
-.lane .tag i { font-style: normal; font-family: Consolas, "Cascadia Code", monospace; font-size: 11px; }
-.lane.dl .tag { color: rgba(255, 140, 150, 0.95); }
-.lane.ul .tag { color: rgba(130, 230, 170, 0.95); }
-.lane .speed { margin-top: 6px; display: flex; align-items: baseline; gap: 4px; min-width: 0; white-space: nowrap; }
-.lane .num { font: 700 20px/1 "Cascadia Code", Consolas, ui-monospace, monospace; letter-spacing: -0.03em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.lane .unit { font: 600 10px/1 Consolas, ui-monospace, monospace; color: var(--muted); flex: 0 0 auto; opacity: 0.9; }
-.lane.dl .num { color: var(--dl); }
-.lane.ul .num { color: var(--ul); }
-.lane.dl .unit { color: rgba(255, 107, 122, 0.75); }
-.lane.ul .unit { color: rgba(62, 224, 138, 0.75); }
-.lane.active.dl { border-color: rgba(255, 107, 122, 0.22); background: linear-gradient(180deg, rgba(255,107,122,0.08), rgba(255,255,255,0.025)); }
-.lane.active.ul { border-color: rgba(62, 224, 138, 0.2); background: linear-gradient(180deg, rgba(62,224,138,0.07), rgba(255,255,255,0.025)); }
-.lane .meta { margin-top: 5px; font: 600 11px/1 Consolas, ui-monospace, monospace; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lane.dl .meta { color: rgba(255, 107, 122, 0.8); }
-.lane.ul .meta { color: rgba(62, 224, 138, 0.8); }
+.speeds {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.sp {
+  min-width: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 10px 10px 9px;
+  border-radius: 11px;
+  background: var(--soft);
+  border: 1px solid rgba(255,255,255,.055);
+}
+.sp .lab {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: .05em; line-height: 1;
+}
+.sp .lab em { font-style: normal; font-family: Consolas, monospace; font-size: 12px; }
+.sp.dl .lab { color: rgba(255,150,160,.95); }
+.sp.ul .lab { color: rgba(130,230,175,.95); }
+.sp .row {
+  margin-top: 7px; display: flex; align-items: baseline; gap: 4px;
+  white-space: nowrap; min-width: 0;
+}
+.sp .num {
+  font: 700 28px/1 "Cascadia Code", Consolas, ui-monospace, monospace;
+  letter-spacing: -.045em; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.sp.dl .num { color: var(--dl); }
+.sp.ul .num { color: var(--ul); }
+.sp .unit {
+  font: 650 13px/1 Consolas, monospace; color: var(--dim); flex: 0 0 auto;
+}
+.sp .sub {
+  margin-top: 6px;
+  font: 600 11px/1 Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sp.dl .sub { color: rgba(255,107,122,.85); }
+.sp.ul .sub { color: rgba(61,222,138,.85); }
+.sp.active.dl {
+  border-color: rgba(255,107,122,.32);
+  background: linear-gradient(160deg, rgba(255,107,122,.14), rgba(255,255,255,.02));
+}
+.sp.active.ul {
+  border-color: rgba(61,222,138,.3);
+  background: linear-gradient(160deg, rgba(61,222,138,.12), rgba(255,255,255,.02));
+}
 
-.counts { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.cell { min-width: 0; text-align: center; padding: 6px 2px 5px; border-radius: 9px; background: rgba(255,255,255,0.028); border: 1px solid rgba(255,255,255,0.04); }
-.cell .k { font-size: 10px; color: var(--muted); line-height: 1; white-space: nowrap; }
-.cell .n { margin-top: 4px; font: 700 14px/1 Consolas, ui-monospace, monospace; color: var(--text); white-space: nowrap; }
-.cell.dl .n { color: var(--dl); }
-.cell.sd .n { color: var(--seed); }
-.cell.st .n { color: var(--stop); }
-.cell.er .n { color: var(--err); }
+.counts {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border: 1px solid rgba(255,255,255,.055);
+  border-radius: 10px;
+  background: rgba(0,0,0,.22);
+  overflow: hidden;
+}
+.counts .c {
+  min-width: 0; text-align: center;
+  padding: 7px 2px 6px;
+  border-right: 1px solid rgba(255,255,255,.055);
+}
+.counts .c:last-child { border-right: 0; }
+.counts .k {
+  font-size: 10px; font-weight: 650; color: var(--mute); line-height: 1;
+}
+.counts .n {
+  margin-top: 4px;
+  font: 700 15px/1 Consolas, monospace;
+}
+.counts .c.dl .n { color: var(--dl); }
+.counts .c.sd .n { color: var(--seed); }
+.counts .c.st .n { color: var(--stop); }
+.counts .c.er .n { color: var(--err); }
 
-.strip { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: 6px; min-height: 0; }
-.strip-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.strip-hd .lbl { font-size: 10px; color: var(--soft); line-height: 1; }
-.strip-hd .pct { font: 650 11px/1 Consolas, ui-monospace, monospace; color: #c8e5ff; white-space: nowrap; }
-.bar { display: flex; height: 5px; border-radius: 99px; overflow: hidden; background: rgba(255,255,255,0.06); }
-.bar > i { display: block; height: 100%; min-width: 0; transition: width 0.28s ease; }
-.bar .b-dl { background: var(--dl); }
-.bar .b-sd { background: var(--seed); }
-.bar .b-st { background: var(--stop); }
-.bar .b-er { background: var(--err); }
+.prog {
+  padding: 8px 9px 9px;
+  border-radius: 10px;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.055);
+}
+.prog .top {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 7px;
+}
+.prog .lbl {
+  font-size: 10px; font-weight: 700; color: var(--mute); white-space: nowrap;
+}
+.prog .hint {
+  flex: 1; min-width: 0; text-align: right;
+  font-size: 10px; color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.prog .pct {
+  font: 700 13px/1 Consolas, monospace; color: var(--dl); white-space: nowrap;
+}
+.bar {
+  height: 10px; border-radius: 99px; overflow: hidden;
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.04);
+}
+.bar > i {
+  display: block; height: 100%; width: 0%;
+  border-radius: inherit; transition: width .28s ease;
+  background: linear-gradient(90deg, #ff4d60, #ff8e9a 72%, #ffb3ba);
+  box-shadow: 0 0 10px rgba(255,107,122,.35);
+}
+.bar > i.idle {
+  width: 100% !important;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255,255,255,.08), rgba(255,255,255,.08) 5px,
+    rgba(255,255,255,.025) 5px, rgba(255,255,255,.025) 10px
+  );
+  box-shadow: none;
+}
 
-.ft { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.06); }
-.stat { min-width: 0; }
-.stat .k { font-size: 10px; color: var(--soft); line-height: 1; white-space: nowrap; }
-.stat .v { margin-top: 4px; font: 700 11px/1.15 Consolas, ui-monospace, monospace; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stat.dl .v { color: var(--dl); }
-.stat.ul .v { color: var(--ul); }
-.stat.disk .v { color: var(--seed); }
+.ft {
+  display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 5px;
+}
+.ft .s {
+  min-width: 0;
+  padding: 7px 7px 6px;
+  border-radius: 9px;
+  background: var(--soft);
+  border: 1px solid rgba(255,255,255,.055);
+}
+.ft .k {
+  font-size: 10px; font-weight: 650; color: var(--mute); line-height: 1;
+}
+.ft .v {
+  margin-top: 4px;
+  font: 700 12px/1.2 Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ft .s.dl .v { color: var(--dl); }
+.ft .s.ul .v { color: var(--ul); }
+.ft .s.disk {
+  background: rgba(79,184,255,.11);
+  border-color: rgba(79,184,255,.24);
+}
+.ft .s.disk .k { color: rgba(170,220,250,.95); }
+.ft .s.disk .v { color: var(--disk); font-size: 13px; }
 
-.menu { display: none; position: fixed; z-index: 30; min-width: 124px; padding: 5px; border-radius: 10px;
-  border: 1px solid var(--stroke); background: rgba(16, 21, 28, 0.96); box-shadow: 0 10px 24px rgba(0,0,0,0.5); cursor: default; backdrop-filter: blur(8px); }
+.menu {
+  display: none; position: fixed; z-index: 30; min-width: 128px;
+  padding: 5px; border-radius: 10px; border: 1px solid var(--line);
+  background: rgba(12,16,22,.96); box-shadow: 0 12px 28px rgba(0,0,0,.5);
+  cursor: default; backdrop-filter: blur(10px);
+}
 .menu.open { display: block; }
-.menu button { display: block; width: 100%; border: 0; border-radius: 7px; background: transparent; color: var(--text); font-size: 12px; text-align: left; padding: 8px 10px; cursor: pointer; }
-.menu button:hover { background: rgba(255,255,255,0.07); }
+.menu button {
+  display: block; width: 100%; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text);
+  font-size: 12px; text-align: left; padding: 8px 10px; cursor: pointer;
+}
+.menu button:hover { background: rgba(255,255,255,.07); }
 </style>
 </head>
 <body>
 <div class="widget offline pywebview-drag-region" id="widget" title="左键拖动 · 右键菜单 · 滚轮透明度">
-  <header class="hd">
+  <header class="z hd">
     <span class="live" id="statusDot"></span>
     <span class="brand">qBit</span>
     <span class="badge" id="statusText">离线</span>
   </header>
 
-  <section class="hero">
-    <div class="lane dl" id="cardDl">
-      <div class="tag"><i>↓</i>下载</div>
-      <div class="speed">
+  <section class="z speeds">
+    <div class="sp dl" id="cardDl">
+      <div class="lab"><em>↓</em> 下载</div>
+      <div class="row">
         <span class="num" id="valDl">--</span>
         <span class="unit" id="unitDl">B/s</span>
       </div>
-      <div class="meta" id="etaDl">ETA --</div>
+      <div class="sub" id="etaDl">ETA --</div>
     </div>
-    <div class="lane ul" id="cardUl">
-      <div class="tag"><i>↑</i>上传</div>
-      <div class="speed">
+    <div class="sp ul" id="cardUl">
+      <div class="lab"><em>↑</em> 上传</div>
+      <div class="row">
         <span class="num" id="valUl">--</span>
         <span class="unit" id="unitUl">B/s</span>
       </div>
-      <div class="meta" id="ratioUl">分享 --</div>
+      <div class="sub" id="ratioUl">分享 --</div>
     </div>
   </section>
 
-  <section class="counts">
-    <div class="cell dl"><div class="k">下载</div><div class="n" id="statDl">-</div></div>
-    <div class="cell sd"><div class="k">做种</div><div class="n" id="statSd">-</div></div>
-    <div class="cell st"><div class="k">停止</div><div class="n" id="statSt">-</div></div>
-    <div class="cell er"><div class="k">错误</div><div class="n" id="statEr">-</div></div>
+  <section class="z counts" title="当前各类任务数量">
+    <div class="c dl" title="下载中 / 取元数据 / 排队"><div class="k">下载</div><div class="n" id="statDl">-</div></div>
+    <div class="c sd" title="做种 / 等待上传"><div class="k">做种</div><div class="n" id="statSd">-</div></div>
+    <div class="c st" title="暂停或停止"><div class="k">停止</div><div class="n" id="statSt">-</div></div>
+    <div class="c er" title="错误或缺文件"><div class="k">错误</div><div class="n" id="statEr">-</div></div>
   </section>
 
-  <section class="strip">
-    <div class="strip-hd">
-      <span class="lbl">任务构成</span>
-      <span class="pct" id="completePct" title="下载中任务平均进度">--</span>
+  <section class="z prog" title="仅统计下载中任务的平均完成度">
+    <div class="top">
+      <span class="lbl">下载进度</span>
+      <span class="hint" id="stripSub">—</span>
+      <span class="pct" id="completePct">--</span>
     </div>
-    <div class="bar" aria-hidden="true">
-      <i class="b-dl" id="barDl"></i>
-      <i class="b-sd" id="barSd"></i>
-      <i class="b-st" id="barSt"></i>
-      <i class="b-er" id="barEr"></i>
-    </div>
+    <div class="bar" aria-hidden="true"><i class="idle" id="barProg"></i></div>
   </section>
 
-  <footer class="ft">
-    <div class="stat dl">
+  <footer class="z ft">
+    <div class="s dl" title="累计下载">
       <div class="k">总下载</div>
       <div class="v" id="totalDl">---</div>
     </div>
-    <div class="stat ul">
+    <div class="s ul" title="累计上传">
       <div class="k">总上传</div>
       <div class="v" id="totalUl">---</div>
     </div>
-    <div class="stat disk">
-      <div class="k">剩余盘</div>
+    <div class="s disk" title="保存路径磁盘剩余空间">
+      <div class="k">剩余空间</div>
       <div class="v" id="freeSpace">---</div>
     </div>
   </footer>
@@ -179,6 +297,11 @@ html, body {
 </div>
 
 <script>
+let widgetOpacity = 1;
+let lastFreeSpace = null;
+let lastFitKey = '';
+let fitTimer = null;
+
 const ids = {
   widget: document.getElementById('widget'),
   statusDot: document.getElementById('statusDot'),
@@ -196,44 +319,89 @@ const ids = {
   statSt: document.getElementById('statSt'),
   statEr: document.getElementById('statEr'),
   completePct: document.getElementById('completePct'),
-  barDl: document.getElementById('barDl'),
-  barSd: document.getElementById('barSd'),
-  barSt: document.getElementById('barSt'),
-  barEr: document.getElementById('barEr'),
+  stripSub: document.getElementById('stripSub'),
+  barProg: document.getElementById('barProg'),
   totalDl: document.getElementById('totalDl'),
   totalUl: document.getElementById('totalUl'),
   freeSpace: document.getElementById('freeSpace'),
-  contextMenu: document.getElementById('contextMenu')
+  contextMenu: document.getElementById('contextMenu'),
 };
 
-let widgetOpacity = 1;
+/** 测量内容真实尺寸（不依赖窗口固定高度） */
+function measureContent() {
+  const el = ids.widget;
+  if (!el) return null;
+  // 强制按内容计算，避免被当前窗口高度限制
+  const prevH = el.style.height;
+  el.style.height = 'auto';
+  const rect = el.getBoundingClientRect();
+  const w = Math.ceil(Math.max(el.scrollWidth, el.offsetWidth, rect.width));
+  const h = Math.ceil(Math.max(el.scrollHeight, el.offsetHeight, rect.height));
+  el.style.height = prevH;
+  // 高 DPI 多留几像素，防止 WebView2 裁底
+  const dpr = window.devicePixelRatio || 1;
+  const pad = dpr >= 1.5 ? 14 : (dpr > 1.1 ? 12 : 10);
+  return { w: w, h: h + pad };
+}
 
-function splitSpeed(bytes) {
-  const b = Math.max(0, Number(bytes) || 0);
-  if (b >= 1073741824) return { n: (b / 1073741824).toFixed(2), u: 'GB/s' };
-  if (b >= 1048576) return { n: (b / 1048576).toFixed(1), u: 'MB/s' };
-  if (b >= 1024) return { n: (b / 1024).toFixed(1), u: 'KB/s' };
-  return { n: String(Math.round(b)), u: 'B/s' };
+function fitWindow(force) {
+  const size = measureContent();
+  if (!size || size.h < 80) return;
+  const key = size.w + 'x' + size.h;
+  if (!force && key === lastFitKey) return;
+  lastFitKey = key;
+  if (window.pywebview && pywebview.api && typeof pywebview.api.fit_window === 'function') {
+    Promise.resolve(pywebview.api.fit_window(size.w, size.h)).catch(function (err) {
+      console.error('fit_window failed', err);
+    });
+  }
+}
+
+function scheduleFit(force) {
+  if (fitTimer) clearTimeout(fitTimer);
+  fitTimer = setTimeout(function () { fitWindow(!!force); }, 30);
+}
+
+function splitSpeed(bytesPerSec) {
+  const n = Math.max(0, Number(bytesPerSec) || 0);
+  if (n < 1024) return { n: n.toFixed(0), u: 'B/s' };
+  if (n < 1024 * 1024) return { n: (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0), u: 'KB/s' };
+  if (n < 1024 * 1024 * 1024) {
+    const mb = n / (1024 * 1024);
+    return { n: mb >= 100 ? mb.toFixed(0) : mb.toFixed(1), u: 'MB/s' };
+  }
+  return { n: (n / (1024 * 1024 * 1024)).toFixed(2), u: 'GB/s' };
 }
 
 function fmtSize(bytes) {
-  const b = Math.max(0, Number(bytes) || 0);
-  if (b >= 1099511627776) return (b / 1099511627776).toFixed(2) + ' TB';
-  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
-  if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
-  if (b >= 1024) return (b / 1024).toFixed(0) + ' KB';
-  return Math.round(b) + ' B';
+  const n = Number(bytes);
+  if (!Number.isFinite(n) || n < 0) return '---';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let v = n, i = 0;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  if (i === 0) return v.toFixed(0) + u[i];
+  if (v >= 100) return v.toFixed(0) + u[i];
+  if (v >= 10) return v.toFixed(1) + u[i];
+  return v.toFixed(2) + u[i];
 }
 
-function fmtEta(seconds) {
-  const s = Number(seconds);
-  if (!Number.isFinite(s) || s <= 0 || s >= 8640000) return 'ETA --';
+function fmtEta(sec) {
+  const s = Number(sec);
+  if (!Number.isFinite(s) || s < 0 || s > 86400 * 30) return 'ETA --';
+  if (s < 60) return 'ETA ' + Math.floor(s) + 's';
+  if (s < 3600) {
+    const m = Math.floor(s / 60);
+    const r = Math.floor(s % 60);
+    return 'ETA ' + m + 'm' + String(r).padStart(2, '0') + 's';
+  }
+  if (s < 86400) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return 'ETA ' + h + 'h' + String(m).padStart(2, '0') + 'm';
+  }
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return 'ETA ' + d + 'd ' + h + 'h';
-  if (h > 0) return 'ETA ' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  return 'ETA 00:' + String(m).padStart(2, '0');
+  return 'ETA ' + d + 'd' + String(h).padStart(2, '0') + 'h';
 }
 
 function fmtRatio(ratio) {
@@ -244,21 +412,29 @@ function fmtRatio(ratio) {
   return '分享 ' + r.toFixed(2);
 }
 
-function setBars(nDl, nSd, nSt, nEr) {
-  const total = Math.max(0, nDl + nSd + nSt + nEr);
-  const pct = total
-    ? function (n) { return ((n / total) * 100).toFixed(2) + '%'; }
-    : function () { return '0%'; };
-  ids.barDl.style.width = pct(nDl);
-  ids.barSd.style.width = pct(nSd);
-  ids.barSt.style.width = pct(nSt);
-  ids.barEr.style.width = pct(nEr);
+function setDownloadProgress(nDl, progressPct) {
+  const p = Math.max(0, Math.min(100, Number(progressPct) || 0));
+  if (nDl > 0) {
+    ids.completePct.textContent = p.toFixed(0) + '%';
+    ids.completePct.title = nDl + ' 个下载中任务的平均完成度';
+    ids.barProg.classList.remove('idle');
+    ids.barProg.style.width = (p <= 0 ? 2 : p).toFixed(1) + '%';
+    ids.stripSub.textContent = nDl + ' 个任务';
+  } else {
+    ids.completePct.textContent = '空闲';
+    ids.completePct.title = '当前没有下载中的任务';
+    ids.barProg.classList.add('idle');
+    ids.barProg.style.width = '100%';
+    ids.stripSub.textContent = '暂无下载';
+  }
 }
 
-function setOffline() {
+function setOffline(reason) {
   ids.widget.classList.add('offline');
   ids.statusDot.className = 'live';
-  ids.statusText.textContent = '离线';
+  const why = (reason && String(reason).trim()) || '离线';
+  ids.statusText.textContent = why.length > 10 ? why.slice(0, 10) + '…' : why;
+  ids.statusText.title = why;
   ids.valDl.textContent = '--';
   ids.unitDl.textContent = '';
   ids.valUl.textContent = '--';
@@ -270,18 +446,21 @@ function setOffline() {
   ids.statSt.textContent = '-';
   ids.statEr.textContent = '-';
   ids.completePct.textContent = '--';
-  ids.completePct.title = '下载中任务平均进度';
-  setBars(0, 0, 0, 0);
+  ids.completePct.title = '';
+  ids.stripSub.textContent = '—';
+  setDownloadProgress(0, 0);
   ids.totalDl.textContent = '---';
   ids.totalUl.textContent = '---';
   ids.freeSpace.textContent = '---';
-  ids.cardDl.className = 'lane dl';
-  ids.cardUl.className = 'lane ul';
+  lastFreeSpace = null;
+  ids.cardDl.className = 'sp dl';
+  ids.cardUl.className = 'sp ul';
+  scheduleFit(false);
 }
 
 function updateData(data) {
   const d = data || {};
-  if (!d.online) { setOffline(); return; }
+  if (!d.online) { setOffline(d.reason); return; }
   const dl = Math.max(0, Number(d.dl) || 0);
   const ul = Math.max(0, Number(d.ul) || 0);
   const ratio = Number(d.ratio);
@@ -295,6 +474,7 @@ function updateData(data) {
   ids.widget.classList.remove('offline');
   ids.statusDot.className = 'live on';
   ids.statusText.textContent = '在线';
+  ids.statusText.title = '在线';
   ids.valDl.textContent = sDl.n;
   ids.unitDl.textContent = sDl.u;
   ids.valUl.textContent = sUl.n;
@@ -305,19 +485,20 @@ function updateData(data) {
   ids.statSd.textContent = String(nSd);
   ids.statSt.textContent = String(nSt);
   ids.statEr.textContent = String(nEr);
-  if (nDl > 0) {
-    ids.completePct.textContent = '进度 ' + progressPct.toFixed(0) + '%';
-    ids.completePct.title = '下载中任务平均进度（' + nDl + ' 个）';
-  } else {
-    ids.completePct.textContent = '空闲';
-    ids.completePct.title = '当前无下载中任务';
-  }
-  setBars(nDl, nSd, nSt, nEr);
+  setDownloadProgress(nDl, progressPct);
   ids.totalDl.textContent = fmtSize(d.totalDl);
   ids.totalUl.textContent = fmtSize(d.totalUl);
-  ids.freeSpace.textContent = (d.freeSpace == null || d.freeSpace === '') ? '---' : fmtSize(d.freeSpace);
-  ids.cardDl.className = 'lane dl' + (dl > 0 ? ' active' : '');
-  ids.cardUl.className = 'lane ul' + (ul > 0 ? ' active' : '');
+  if (d.freeSpace != null && d.freeSpace !== '') {
+    lastFreeSpace = d.freeSpace;
+    ids.freeSpace.textContent = fmtSize(d.freeSpace);
+  } else if (lastFreeSpace != null) {
+    ids.freeSpace.textContent = fmtSize(lastFreeSpace);
+  } else {
+    ids.freeSpace.textContent = '---';
+  }
+  ids.cardDl.className = 'sp dl' + (dl > 0 ? ' active' : '');
+  ids.cardUl.className = 'sp ul' + (ul > 0 ? ' active' : '');
+  scheduleFit(false);
 }
 
 function callApi(name) {
@@ -353,10 +534,27 @@ document.addEventListener('click', function (event) {
   if (!event.target.closest || !event.target.closest('.menu')) closeContextMenu();
 });
 
+ids.widget.addEventListener('dblclick', function () {
+  callApi('open_webui');
+});
+
 document.addEventListener('wheel', function (event) {
   widgetOpacity = Math.max(0.45, Math.min(1, widgetOpacity + (event.deltaY > 0 ? -0.05 : 0.05)));
   ids.widget.style.opacity = String(widgetOpacity);
 }, { passive: true });
+
+// 启动后多次自适应（字体/WebView2 初始化会改变实测高度）
+function bootFit() {
+  fitWindow(true);
+  setTimeout(function () { fitWindow(true); }, 120);
+  setTimeout(function () { fitWindow(true); }, 400);
+  setTimeout(function () { fitWindow(true); }, 900);
+}
+window.addEventListener('load', bootFit);
+window.addEventListener('pywebviewready', bootFit);
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(bootFit, 0);
+}
 </script>
 </body>
 </html>
