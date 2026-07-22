@@ -10,7 +10,9 @@
     "build": "vite build",
     "start": "node server/index.mjs --static",
     "widget": "python widget-web/widget.py",
-    "server:static": "node server/index.mjs --static"
+    "server:static": "node server/index.mjs --static",
+    "test": "node server/_test_daily_stats.mjs",
+    "test:stats": "node server/_test_daily_stats.mjs"
   },
   "dependencies": {
     "concurrently": "^9.2.1",

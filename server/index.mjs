@@ -229,6 +229,7 @@ const trafficBaselinePath = path.resolve(__dirname, "../data/traffic-baseline.js
 const dayFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.TZ || "Asia/Shanghai" });
 let appInfoCache = null;
 let dashboardServerState = {};
+let dashboardTorrents = Object.create(null);
 let dashboardInitialized = false;
 /** @type {Map<number, Promise<any>>} concurrent dashboard requests by rid */
 const dashboardInflight = new Map();
@@ -412,9 +413,37 @@ app.get("/api/dashboard", async (request, response, next) => {
           getAppInfo(),
           qbit.json(`/api/v2/sync/maindata?rid=${rid}`)
         ]);
-        if (syncData.full_update) dashboardServerState = {};
+        if (syncData.full_update) {
+          dashboardServerState = {};
+          dashboardTorrents = Object.create(null);
+        }
         Object.assign(dashboardServerState, syncData.server_state || {});
+        if (syncData.torrents && typeof syncData.torrents === "object") {
+          for (const [hash, row] of Object.entries(syncData.torrents)) {
+            const prev = dashboardTorrents[hash] || {};
+            dashboardTorrents[hash] = { ...prev, ...(row || {}), hash: (row && row.hash) || hash };
+          }
+        }
+        for (const hash of syncData.torrents_removed || []) {
+          delete dashboardTorrents[hash];
+        }
         dashboardInitialized = true;
+        // Feed daily stats live cache (shared poll — no extra torrents/info when dashboard is active)
+        try {
+          dailyStats.ingestLive({
+            torrents: dashboardTorrents,
+            serverState: dashboardServerState,
+            transfer: {
+              alltime_dl: dashboardServerState.alltime_dl,
+              alltime_ul: dashboardServerState.alltime_ul,
+              dl_info_speed: dashboardServerState.dl_info_speed,
+              up_info_speed: dashboardServerState.up_info_speed,
+              free_space_on_disk: dashboardServerState.free_space_on_disk
+            }
+          });
+        } catch (e) {
+          console.error(`[stats] ingestLive failed: ${e.message}`);
+        }
         return {
           ok: true,
           qbitUrl: qbit.baseUrl,
@@ -441,6 +470,7 @@ app.get("/api/dashboard", async (request, response, next) => {
   } catch (error) {
     // Force full resync next time after hard failure (session drop, rid mismatch, etc.)
     dashboardInitialized = false;
+    dashboardTorrents = Object.create(null);
     next(error);
   }
 });
@@ -561,7 +591,17 @@ const dailyStats = new DailyStatsCollector({
   forceMinIntervalMs: statsForceMinIntervalMs,
   logger: (msg) => console.log(msg),
   fetchTorrents: async () => qbit.json("/api/v2/torrents/info"),
-  fetchTransfer: async () => qbit.json("/api/v2/transfer/info")
+  fetchTransfer: async () => {
+    const transfer = await qbit.json("/api/v2/transfer/info");
+    return {
+      ...transfer,
+      alltime_dl: transfer.alltime_dl ?? dashboardServerState.alltime_dl,
+      alltime_ul: transfer.alltime_ul ?? dashboardServerState.alltime_ul,
+      free_space_on_disk: transfer.free_space_on_disk ?? dashboardServerState.free_space_on_disk,
+      dl_info_speed: transfer.dl_info_speed ?? dashboardServerState.dl_info_speed,
+      up_info_speed: transfer.up_info_speed ?? dashboardServerState.up_info_speed
+    };
+  }
 });
 
 function parseDateParam(value, label = "date") {
@@ -583,11 +623,14 @@ function parseDateParam(value, label = "date") {
 }
 
 app.get("/api/stats/days", (_request, response) => {
+  const health = dailyStats.getHealth();
   response.json({
     ok: true,
     days: dailyStats.listDays(),
     today: todayKey(),
     sampleMs: statsSampleMs,
+    maxGapMs: health.maxGapMs,
+    forceMinIntervalMs: statsForceMinIntervalMs,
     retentionDays: statsRetentionDays
   });
 });
@@ -631,6 +674,16 @@ app.post("/api/stats/sample", async (_request, response, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.get("/api/stats/health", (_request, response) => {
+  response.json({
+    ok: true,
+    today: todayKey(),
+    ...dailyStats.getHealth(),
+    dashboardTorrentCount: Object.keys(dashboardTorrents).length,
+    dashboardInitialized
+  });
 });
 
 if (process.env.SERVE_STATIC === "true" || process.argv.includes("--static")) {

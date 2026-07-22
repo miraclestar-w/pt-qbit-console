@@ -216,6 +216,118 @@ const day3 = collector.getDayView("2099-01-17");
 assertEq(day3.global.uploaded, 0, "large gap rejects delta");
 assertEq(day3.sampleCount, 1, "day3 baseline sample");
 
+// wall seconds: status with n>=1 advances wall by dtSec only once
+assert(view.global.statusWallSeconds, "has statusWallSeconds");
+assert(view.global.statusWallSeconds.stalled_up > 0, "wall stalled_up");
+assert(view.global.statusWallSeconds.downloading > 0, "wall downloading");
+// task-seconds should be >= wall when concurrent tasks > 1 possible; at least wall <= task for same key
+assert(
+  view.global.statusSeconds.stalled_up >= view.global.statusWallSeconds.stalled_up - 1e-6,
+  "task-seconds >= wall for stalled_up"
+);
+assert(
+  typeof view.global.seedingRelatedWallSeconds === "number",
+  "seedingRelatedWallSeconds present"
+);
+
+// --- ingestLive + maindata_cache path ---
+const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), "qb-stats2-"));
+let apiHits = 0;
+const c2 = new DailyStatsCollector({
+  dataDir: tmp2,
+  dayKey: () => "2099-02-01",
+  sampleMs: 60_000,
+  retentionDays: 30,
+  forceMinIntervalMs: 1,
+  logger: () => {},
+  fetchTorrents: async () => {
+    apiHits += 1;
+    return [
+      {
+        hash: "ccc",
+        tracker: "https://c.example/announce",
+        state: "uploading",
+        progress: 1,
+        downloaded: 0,
+        uploaded: 100,
+        dlspeed: 0,
+        upspeed: 10
+      }
+    ];
+  },
+  fetchTransfer: async () => ({ alltime_dl: 1, alltime_ul: 2, free_space_on_disk: 9 })
+});
+await c2.sampleSafe(); // api
+assertEq(apiHits, 1, "first sample hits API");
+// set snapshot age so next sample accepts delta
+const d201 = c2.loadDay("2099-02-01");
+d201.lastSnapshot.at = Date.now() - 60_000;
+c2.ingestLive({
+  torrents: [
+    {
+      hash: "ccc",
+      tracker: "https://c.example/announce",
+      state: "uploading",
+      progress: 1,
+      downloaded: 0,
+      uploaded: 250,
+      dlspeed: 0,
+      upspeed: 20
+    }
+  ],
+  transfer: { alltime_dl: 1, alltime_ul: 2 },
+  serverState: { free_space_on_disk: 8 }
+});
+assert(c2.getHealth().liveTorrentCount === 1, "live torrent count");
+assert(c2.getHealth().lastIngestAt, "lastIngestAt set");
+const beforeHits = apiHits;
+// non-force sample should use cache (fresh)
+await c2.sampleSafe({ force: false });
+assertEq(apiHits, beforeHits, "fresh live cache avoids API");
+const v2 = c2.getDayView("2099-02-01");
+assertEq(v2.global.uploaded, 150, "cache path uploaded delta");
+assert(v2.global.statusWallSeconds.seeding > 0 || v2.global.statusSeconds.seeding > 0, "seeding time from cache");
+// forceApi always hits API
+await c2.sampleSafe({ force: true });
+assert(apiHits > beforeHits, "force sample hits API");
+const health = c2.getHealth();
+assert(health.lastSampleSource === "api" || health.lastSampleSource === "maindata_cache", "sample source set");
+assert(typeof health.successCount === "number" && health.successCount >= 2, "successCount");
+
+// --- forceApi / fail streak backoff schedule ---
+const tmp3 = fs.mkdtempSync(path.join(os.tmpdir(), "qb-stats3-"));
+let failMode = true;
+const c3 = new DailyStatsCollector({
+  dataDir: tmp3,
+  dayKey: () => "2099-03-01",
+  sampleMs: 60_000,
+  retentionDays: 30,
+  forceMinIntervalMs: 1,
+  logger: () => {},
+  fetchTorrents: async () => {
+    if (failMode) throw new Error("boom");
+    return [];
+  },
+  fetchTransfer: async () => ({})
+});
+let threw = false;
+try {
+  await c3.sampleSafe();
+} catch {
+  threw = true;
+}
+assert(threw, "sample throws on fetch fail");
+assert(c3.getHealth().failStreak >= 1, "failStreak increments");
+c3._scheduleNext();
+assert(c3.currentIntervalMs >= 120_000, "backoff doubles interval after fail");
+failMode = false;
+await c3.sampleSafe();
+assertEq(c3.getHealth().failStreak, 0, "success resets failStreak");
+c3._scheduleNext();
+assertEq(c3.currentIntervalMs, 60_000, "interval resets to sampleMs");
+c3.stop();
+c2.stop();
+
 collector.stop();
 assert(fs.existsSync(file), "day file exists after stop");
 const raw2 = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -224,4 +336,6 @@ const first = Object.values(raw2.lastSnapshot.torrents)[0];
 assert("u" in first && "d" in first, "slim snapshot shape");
 
 fs.rmSync(tmp, { recursive: true, force: true });
+fs.rmSync(tmp2, { recursive: true, force: true });
+fs.rmSync(tmp3, { recursive: true, force: true });
 console.log("ALL TESTS PASSED");

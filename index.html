@@ -1354,6 +1354,158 @@
       color: var(--text-3);
       font-size: 13px;
     }
+
+    /* Daily stats extras */
+    .stats-card .value.ratio-inf {
+      color: #fbbf24;
+      text-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
+    }
+    .stats-toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .stats-health {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-3);
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      max-width: min(420px, 48vw);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stats-health .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-3);
+      flex-shrink: 0;
+    }
+    .stats-health.ok .dot { background: var(--green); }
+    .stats-health.warn .dot { background: var(--orange); }
+    .stats-health.err .dot { background: var(--red); }
+    .stats-toolbar .btn.busy,
+    .stats-toolbar .btn:disabled {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .status-row {
+      grid-template-columns: 72px 1fr minmax(110px, 132px);
+    }
+    .status-row .time small {
+      display: block;
+      font-size: 10px;
+      opacity: 0.78;
+      margin-top: 1px;
+    }
+    .tracker-tools {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tracker-tools input[type="search"] {
+      flex: 1;
+      min-width: 140px;
+      max-width: 280px;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 12px;
+    }
+    .tracker-tools label.chk {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--text-2);
+      user-select: none;
+      cursor: pointer;
+    }
+    .tracker-tools .spacer { flex: 1; }
+    .tracker-stats-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .tracker-stats-table th.sortable:hover { color: var(--text); }
+    .tracker-stats-table th.sorted-asc::after { content: " ▲"; font-size: 9px; opacity: 0.7; }
+    .tracker-stats-table th.sorted-desc::after { content: " ▼"; font-size: 9px; opacity: 0.7; }
+    .history-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .history-bar.compare-a {
+      outline: 2px solid var(--cyan);
+      outline-offset: 1px;
+      border-radius: 6px;
+    }
+    .history-bar.compare-b {
+      outline: 2px solid var(--orange);
+      outline-offset: 1px;
+      border-radius: 6px;
+    }
+    .compare-panel {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px dashed var(--border-2);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      color: var(--text-2);
+      display: none;
+    }
+    .compare-panel.show { display: block; }
+    .compare-panel .cmp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 8px 14px;
+      margin-top: 8px;
+    }
+    .compare-panel .cmp-item b {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+      margin-top: 2px;
+    }
+    .compare-panel .pos { color: var(--green); }
+    .compare-panel .neg { color: var(--orange); }
+    .stats-toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 80;
+      background: var(--card);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--text-2);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.28);
+      max-width: 320px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .stats-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .stats-toast.err { border-color: rgba(239,68,68,0.45); color: #fecaca; }
+
     .nav-item.page-nav .left svg { opacity: 0.9; }
     #view-torrents { display: contents; }
 
@@ -1598,12 +1750,18 @@
           <button class="btn" type="button" id="stats-next-day" title="后一天">›</button>
           <button class="btn" type="button" id="stats-today-btn">今天</button>
         </div>
-        <button class="btn" type="button" id="stats-refresh-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          刷新采样
-        </button>
-        <span class="hint" id="stats-hint">服务端每分钟采样；跨日短间隔会继承昨日快照避免丢流量；状态为任务·秒</span>
+        <div class="stats-toolbar-actions">
+          <button class="btn" type="button" id="stats-refresh-btn" title="强制从 qB API 采样（有频率限制）">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            刷新采样
+          </button>
+          <button class="btn" type="button" id="stats-export-json" title="导出当日 JSON">导出 JSON</button>
+          <button class="btn" type="button" id="stats-export-csv" title="导出 Tracker CSV">导出 CSV</button>
+          <span class="stats-health" id="stats-health" title="采集健康状态">健康检查中…</span>
+        </div>
+        <span class="hint" id="stats-hint">服务端定时采样；跨日短间隔（默认 &lt;15 分钟）继承昨日快照；状态同时显示墙钟与任务·秒</span>
       </div>
+      <div class="stats-toast" id="stats-toast" role="status"></div>
 
       <div class="stats-cards" id="stats-cards">
         <div class="stats-card"><div class="label">当日上传</div><div class="value green" id="s-up">-</div><div class="sub" id="s-up-sub">-</div></div>
@@ -1617,8 +1775,8 @@
       <div class="stats-grid">
         <div class="stats-panel">
           <div class="stats-panel-head">
-            <h3>状态时长（任务·秒）</h3>
-            <span class="meta" id="status-meta" title="任务·秒 = 处于该状态的任务数 × 采样间隔秒数，不是墙钟时间">任务数×间隔累计，非墙钟</span>
+            <h3>状态时长</h3>
+            <span class="meta" id="status-meta" title="墙钟 = 至少有 1 个任务处于该状态的累计秒数；任务·秒 = 任务数 × 采样间隔；旁注为平均并发">主显示墙钟 · 旁注任务·秒/并发</span>
           </div>
           <div class="stats-panel-body">
             <div class="status-bars" id="status-bars"></div>
@@ -1638,33 +1796,43 @@
       <div class="stats-panel" style="margin-bottom:16px">
         <div class="stats-panel-head">
           <h3>近 14 日流量</h3>
-          <span class="meta">青=上传 · 橙=下载 · 点击切换日期</span>
+          <div class="history-toolbar">
+            <span class="meta">青=上传 · 橙=下载 · 单击选日 · Shift+单击对比</span>
+            <button class="btn" type="button" id="stats-clear-compare" title="清除对比日" style="display:none">清除对比</button>
+          </div>
         </div>
         <div class="stats-panel-body">
           <div class="history-chart" id="history-chart"></div>
+          <div class="compare-panel" id="compare-panel"></div>
         </div>
       </div>
 
       <div class="stats-panel">
         <div class="stats-panel-head">
           <h3>各 Tracker 明细</h3>
-          <span class="meta" id="tracker-meta">上传 / 下载 / 速度极值与均值 / 状态时长</span>
+          <span class="meta" id="tracker-meta">上传 / 下载 / 速度 / 墙钟做种·下载</span>
+        </div>
+        <div class="tracker-tools">
+          <input type="search" id="tracker-search" placeholder="搜索 Tracker…" autocomplete="off" />
+          <label class="chk"><input type="checkbox" id="tracker-traffic-only" /> 仅有流量</label>
+          <span class="spacer"></span>
+          <span class="meta" id="tracker-count-meta">0 项</span>
         </div>
         <div class="tracker-stats-wrap">
           <table class="tracker-stats-table" id="tracker-stats-table">
             <thead>
               <tr>
-                <th>Tracker</th>
-                <th class="num">上传</th>
-                <th class="num">下载</th>
-                <th class="num">分享率</th>
-                <th class="num">上传均速</th>
-                <th class="num">上传峰值</th>
-                <th class="num">下载均速</th>
-                <th class="num">下载峰值</th>
-                <th class="num">任务均/峰</th>
-                <th class="num">做种时长</th>
-                <th class="num">下载时长</th>
+                <th class="sortable" data-sort="host">Tracker</th>
+                <th class="num sortable" data-sort="uploaded">上传</th>
+                <th class="num sortable" data-sort="downloaded">下载</th>
+                <th class="num sortable" data-sort="ratio">分享率</th>
+                <th class="num sortable" data-sort="upAvg">上传均速</th>
+                <th class="num sortable" data-sort="upMax">上传峰值</th>
+                <th class="num sortable" data-sort="dlAvg">下载均速</th>
+                <th class="num sortable" data-sort="dlMax">下载峰值</th>
+                <th class="num sortable" data-sort="torrents">任务均/峰</th>
+                <th class="num sortable" data-sort="seedWall">做种墙钟</th>
+                <th class="num sortable" data-sort="dlWall">下载墙钟</th>
               </tr>
             </thead>
             <tbody id="tracker-stats-body">
@@ -1790,7 +1958,10 @@ async function apiJson(url, init = {}) {
     });
     if (!r.ok) {
       const b = await r.json().catch(() => null);
-      throw new Error(b?.message || '请求失败: ' + r.status);
+      const err = new Error(b?.message || '请求失败: ' + r.status);
+      err.status = r.status;
+      err.payload = b;
+      throw err;
     }
     return r.json();
   } catch (error) {
@@ -2527,6 +2698,14 @@ let statsDate = '';
 let statsDays = [];
 let statsSummary = [];
 let statsLoading = false;
+let statsRefreshing = false;
+let statsLastDaily = null;
+let statsCompareDate = '';
+let statsTrackerQuery = '';
+let statsTrafficOnly = false;
+let statsSortKey = 'uploaded';
+let statsSortDir = 'desc';
+let statsHealthTimer = 0;
 
 const STATUS_LABELS = {
   downloading: '下载',
@@ -2562,6 +2741,12 @@ function setAppView(view) {
 
   if (appView === 'stats') {
     void loadStatsPage(false);
+    void refreshStatsHealth();
+    if (!statsHealthTimer) {
+      statsHealthTimer = setInterval(() => {
+        if (appView === 'stats') void refreshStatsHealth();
+      }, 30_000);
+    }
   }
 }
 
@@ -2593,6 +2778,13 @@ function fmtRatio(v) {
   return n.toFixed(2);
 }
 
+function isInfiniteRatio(v) {
+  if (v === null || v === undefined) return true;
+  if (v === Infinity || v === 'Infinity') return true;
+  const n = Number(v);
+  return !Number.isFinite(n);
+}
+
 function fmtTimeShort(iso) {
   if (!iso) return '-';
   try {
@@ -2614,6 +2806,221 @@ function speedCell(s) {
   };
 }
 
+function showStatsToast(msg, isErr = false) {
+  const el = document.getElementById('stats-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.toggle('err', Boolean(isErr));
+  el.classList.add('show');
+  clearTimeout(showStatsToast._t);
+  showStatsToast._t = setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function downloadText(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function csvEscape(v) {
+  const s = String(v ?? '');
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function mergeStatusLegacy(statusSecRaw) {
+  const statusSec = { ...(statusSecRaw || {}) };
+  if (statusSec.stalled && !statusSec.stalled_up) {
+    statusSec.stalled_up = (statusSec.stalled_up || 0) + statusSec.stalled;
+  }
+  return statusSec;
+}
+
+function trackerSortValue(t, key) {
+  switch (key) {
+    case 'host': return String(t.host || '').toLowerCase();
+    case 'uploaded': return t.uploaded || 0;
+    case 'downloaded': return t.downloaded || 0;
+    case 'ratio': {
+      if (isInfiniteRatio(t.ratio)) return Number.POSITIVE_INFINITY;
+      return Number(t.ratio) || 0;
+    }
+    case 'upAvg': return (t.upSpeed || {}).avg || 0;
+    case 'upMax': return (t.upSpeed || {}).max || 0;
+    case 'dlAvg': return (t.dlSpeed || {}).avg || 0;
+    case 'dlMax': return (t.dlSpeed || {}).max || 0;
+    case 'torrents': return t.torrentCountMax || 0;
+    case 'seedWall': return ((t.statusWallSeconds || t.statusSeconds || {}).seeding) || 0;
+    case 'dlWall': return ((t.statusWallSeconds || t.statusSeconds || {}).downloading) || 0;
+    default: return 0;
+  }
+}
+
+function getFilteredTrackers(data) {
+  let list = (data && data.trackers) || [];
+  const q = statsTrackerQuery.trim().toLowerCase();
+  if (q) list = list.filter((t) => String(t.host || '').toLowerCase().includes(q));
+  if (statsTrafficOnly) {
+    list = list.filter((t) => (t.uploaded || 0) > 0 || (t.downloaded || 0) > 0);
+  }
+  const dir = statsSortDir === 'asc' ? 1 : -1;
+  list = list.slice().sort((a, b) => {
+    const va = trackerSortValue(a, statsSortKey);
+    const vb = trackerSortValue(b, statsSortKey);
+    if (typeof va === 'string' || typeof vb === 'string') {
+      return String(va).localeCompare(String(vb), 'zh') * dir;
+    }
+    if (va === vb) return String(a.host || '').localeCompare(String(b.host || ''), 'zh');
+    return (va < vb ? -1 : 1) * dir;
+  });
+  return list;
+}
+
+function updateTrackerSortHeaders() {
+  document.querySelectorAll('#tracker-stats-table th.sortable').forEach((th) => {
+    const key = th.getAttribute('data-sort');
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (key === statsSortKey) th.classList.add(statsSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+  });
+}
+
+function renderTrackerTable(data) {
+  const body = document.getElementById('tracker-stats-body');
+  if (!body) return;
+  const trackers = getFilteredTrackers(data);
+  const meta = document.getElementById('tracker-count-meta');
+  const total = ((data && data.trackers) || []).length;
+  if (meta) meta.textContent = trackers.length === total
+    ? (total + ' 项')
+    : (trackers.length + ' / ' + total + ' 项');
+  updateTrackerSortHeaders();
+  if (!trackers.length) {
+    body.innerHTML = '<tr><td colspan="11" class="stats-empty">'
+      + (total ? '没有匹配的 Tracker' : '暂无 Tracker 明细。保持服务运行后会按采样累计。')
+      + '</td></tr>';
+    return;
+  }
+  body.innerHTML = trackers.map((t) => {
+    const color = trackerColorClassForHost(t.host);
+    const wall = t.statusWallSeconds || {};
+    const task = t.statusSeconds || {};
+    const seedWall = wall.seeding || 0;
+    const dlWall = wall.downloading || 0;
+    const seedTask = task.seeding || 0;
+    const dlTask = task.downloading || 0;
+    const ratioTxt = fmtRatio(t.ratio);
+    const ratioCls = isInfiniteRatio(t.ratio) && (t.uploaded || 0) > 0 ? ' style="color:#fbbf24;font-weight:700"' : '';
+    return '<tr>'
+      + '<td class="host ' + color + '" title="' + esc(t.host) + '">' + esc(t.host) + '</td>'
+      + '<td class="num">' + fmtBytes(t.uploaded || 0) + '</td>'
+      + '<td class="num">' + fmtBytes(t.downloaded || 0) + '</td>'
+      + '<td class="num"' + ratioCls + '>' + ratioTxt + '</td>'
+      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).avg || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).max || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).avg || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).max || 0) + '</td>'
+      + '<td class="num">' + (t.torrentCountAvg || 0).toFixed(1) + ' / ' + Math.round(t.torrentCountMax || 0) + '</td>'
+      + '<td class="num" title="墙钟 ' + Math.round(seedWall) + 's · 任务·秒 ' + Math.round(seedTask) + '">' + fmtDuration(seedWall) + '</td>'
+      + '<td class="num" title="墙钟 ' + Math.round(dlWall) + 's · 任务·秒 ' + Math.round(dlTask) + '">' + fmtDuration(dlWall) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function exportStatsJson() {
+  if (!statsLastDaily) {
+    showStatsToast('暂无数据可导出', true);
+    return;
+  }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    ...statsLastDaily
+  };
+  downloadText('qb-stats-' + (statsLastDaily.date || 'day') + '.json', JSON.stringify(payload, null, 2), 'application/json');
+  showStatsToast('已导出 JSON');
+}
+
+function exportStatsCsv() {
+  if (!statsLastDaily) {
+    showStatsToast('暂无数据可导出', true);
+    return;
+  }
+  const trackers = getFilteredTrackers(statsLastDaily);
+  const headers = [
+    'host', 'uploaded', 'downloaded', 'ratio',
+    'up_avg', 'up_max', 'up_min', 'dl_avg', 'dl_max', 'dl_min',
+    'torrent_avg', 'torrent_max',
+    'seed_wall_s', 'dl_wall_s', 'seed_task_s', 'dl_task_s'
+  ];
+  const rows = [headers.join(',')];
+  for (const t of trackers) {
+    const wall = t.statusWallSeconds || {};
+    const task = t.statusSeconds || {};
+    rows.push([
+      csvEscape(t.host),
+      t.uploaded || 0,
+      t.downloaded || 0,
+      isInfiniteRatio(t.ratio) ? 'inf' : Number(t.ratio || 0),
+      (t.upSpeed || {}).avg || 0,
+      (t.upSpeed || {}).max || 0,
+      (t.upSpeed || {}).min || 0,
+      (t.dlSpeed || {}).avg || 0,
+      (t.dlSpeed || {}).max || 0,
+      (t.dlSpeed || {}).min || 0,
+      (t.torrentCountAvg || 0).toFixed(3),
+      Math.round(t.torrentCountMax || 0),
+      Math.round(wall.seeding || 0),
+      Math.round(wall.downloading || 0),
+      Math.round(task.seeding || 0),
+      Math.round(task.downloading || 0)
+    ].join(','));
+  }
+  downloadText('qb-stats-trackers-' + (statsLastDaily.date || 'day') + '.csv', '\uFEFF' + rows.join('\n'), 'text/csv;charset=utf-8');
+  showStatsToast('已导出 CSV（' + trackers.length + ' 行）');
+}
+
+async function refreshStatsHealth() {
+  const el = document.getElementById('stats-health');
+  if (!el) return;
+  try {
+    const h = await apiJson('/api/stats/health');
+    const ageSec = h.lastSampleAt ? Math.max(0, Math.round((Date.now() - new Date(h.lastSampleAt).getTime()) / 1000)) : null;
+    const src = h.lastSampleSource || '-';
+    const interval = Math.round((h.currentIntervalMs || h.sampleMs || 60000) / 1000);
+    const fail = h.failStreak || 0;
+    let cls = 'ok';
+    if (fail >= 3 || !h.running) cls = 'err';
+    else if (fail > 0 || (ageSec != null && ageSec > interval * 3)) cls = 'warn';
+    el.className = 'stats-health ' + cls;
+    const ageTxt = ageSec == null ? '未采样' : (ageSec < 60 ? ageSec + 's 前' : Math.round(ageSec / 60) + 'm 前');
+    el.innerHTML = '<span class="dot"></span>'
+      + '源 ' + esc(src)
+      + ' · 间隔 ' + interval + 's'
+      + ' · ' + ageTxt
+      + (fail ? ' · 连续失败 ' + fail : '')
+      + (h.liveTorrentCount != null ? ' · live ' + h.liveTorrentCount : '');
+    el.title = [
+      'running=' + h.running,
+      'source=' + src,
+      'success=' + (h.successCount || 0),
+      'fail=' + (h.failCount || 0),
+      'failStreak=' + fail,
+      'dirtyDays=' + (h.dirtyDays || 0),
+      'maxGapMs=' + (h.maxGapMs || 0),
+      'lastError=' + (h.lastError || '-')
+    ].join('\n');
+  } catch (e) {
+    el.className = 'stats-health err';
+    el.innerHTML = '<span class="dot"></span>健康接口不可用';
+    el.title = e.message || '';
+  }
+}
+
 let statsLoadSeq = 0;
 
 async function loadStatsPage(forceSample = false) {
@@ -2627,7 +3034,6 @@ async function loadStatsPage(forceSample = false) {
     const daysRes = await apiJson('/api/stats/days');
     if (seq !== statsLoadSeq) return;
     statsDays = daysRes.days || [];
-    // Prefer server timezone day key; avoid UTC fallback near midnight
     const today = daysRes.today || statsDate || '';
     if (!statsDate) statsDate = today;
 
@@ -2644,22 +3050,25 @@ async function loadStatsPage(forceSample = false) {
       apiJson('/api/stats/summary?limit=14')
     ]);
     if (seq !== statsLoadSeq) return;
-    // User switched date while in flight — ignore stale payload
     if (requestedDate && statsDate && requestedDate !== statsDate && daily.date && daily.date !== statsDate) {
       return;
     }
     statsSummary = (summary.days || []).slice().reverse();
+    statsLastDaily = daily;
     renderStatsDaily(daily);
     renderStatsHistory(statsSummary, statsDate);
+    renderComparePanel();
     if (hint) {
       const intervalMin = Math.round((daysRes.sampleMs || 60000) / 60000);
-      hint.textContent = `采样间隔约 ${intervalMin || 1} 分钟 · 保留 ${daysRes.retentionDays || 90} 天 · 最后更新 ${fmtTimeShort(daily.updatedAt)}`;
+      const gapMin = Math.round((daysRes.maxGapMs || 15 * 60_000) / 60000);
+      hint.textContent = `采样约 ${intervalMin || 1} 分钟 · 跨日继承阈值 ${gapMin || 15} 分钟 · 保留 ${daysRes.retentionDays || 90} 天 · 更新 ${fmtTimeShort(daily.updatedAt)}`;
     }
   } catch (e) {
     if (seq !== statsLoadSeq) return;
     if (hint) hint.textContent = e.message || '统计加载失败';
     const body = document.getElementById('tracker-stats-body');
     if (body) body.innerHTML = '<tr><td colspan="11" class="stats-empty">' + esc(e.message || '加载失败') + '</td></tr>';
+    showStatsToast(e.message || '统计加载失败', true);
   } finally {
     if (seq === statsLoadSeq) statsLoading = false;
   }
@@ -2669,7 +3078,10 @@ function renderStatsDaily(data) {
   const g = data.global || {};
   document.getElementById('s-up').textContent = fmtBytes(g.uploaded || 0);
   document.getElementById('s-dl').textContent = fmtBytes(g.downloaded || 0);
-  document.getElementById('s-ratio').textContent = fmtRatio(g.ratio);
+  const ratioEl = document.getElementById('s-ratio');
+  ratioEl.textContent = fmtRatio(g.ratio);
+  const pureUpload = (g.uploaded || 0) > 0 && (g.downloaded || 0) === 0;
+  ratioEl.classList.toggle('ratio-inf', pureUpload || isInfiniteRatio(g.ratio));
   document.getElementById('s-samples').textContent = String(data.sampleCount || 0);
   document.getElementById('s-updated').textContent = '更新 ' + fmtTimeShort(data.updatedAt);
   document.getElementById('s-torrents').textContent = String(Math.round(g.torrentCountMax || 0));
@@ -2677,33 +3089,38 @@ function renderStatsDaily(data) {
   document.getElementById('s-trackers').textContent = String((data.trackers || []).length);
   document.getElementById('s-up-sub').textContent = '峰值 ' + fmtSpeed((g.upSpeed || {}).max || 0);
   document.getElementById('s-dl-sub').textContent = '峰值 ' + fmtSpeed((g.dlSpeed || {}).max || 0);
-  document.getElementById('s-ratio-sub').textContent = (g.downloaded > 0 || g.uploaded > 0) ? '基于当日流量' : '尚无流量';
-
-  const statusSecRaw = g.statusSeconds || {};
-  const statusSec = { ...statusSecRaw };
-  if (statusSec.stalled && !statusSec.stalled_up) {
-    statusSec.stalled_up = (statusSec.stalled_up || 0) + statusSec.stalled;
+  if (pureUpload) {
+    document.getElementById('s-ratio-sub').textContent = '纯上传日 · 分享率 ∞';
+  } else {
+    document.getElementById('s-ratio-sub').textContent = (g.downloaded > 0 || g.uploaded > 0) ? '基于当日流量' : '尚无流量';
   }
+
+  const statusSec = mergeStatusLegacy(g.statusSeconds || {});
+  const statusWall = mergeStatusLegacy(g.statusWallSeconds || {});
   const statusAvg = g.statusAvg || {};
-  const totalSec = Object.keys(STATUS_LABELS).reduce((s, k) => s + (statusSec[k] || 0), 0);
-  const maxSec = Math.max(1, ...Object.keys(STATUS_LABELS).map((k) => statusSec[k] || 0));
+  const totalWall = Object.keys(STATUS_LABELS).reduce((s, k) => s + (statusWall[k] || 0), 0);
+  const totalTask = Object.keys(STATUS_LABELS).reduce((s, k) => s + (statusSec[k] || 0), 0);
+  const maxWall = Math.max(1, ...Object.keys(STATUS_LABELS).map((k) => statusWall[k] || 0));
   const bars = document.getElementById('status-bars');
   bars.innerHTML = Object.keys(STATUS_LABELS).map((k) => {
-    const sec = statusSec[k] || 0;
-    const pct = Math.max(0, Math.min(100, (sec / maxSec) * 100));
+    const wall = statusWall[k] || 0;
+    const task = statusSec[k] || 0;
+    const pct = Math.max(0, Math.min(100, (wall / maxWall) * 100));
     const avg = statusAvg[k] || 0;
+    const title = '墙钟 ' + Math.round(wall) + 's · 任务·秒 ' + Math.round(task) + ' · 平均并发 ' + avg.toFixed(1);
     return '<div class="status-row">'
       + '<span class="name">' + STATUS_LABELS[k] + '</span>'
       + '<div class="bar-track"><div class="bar-fill ' + k + '" style="width:' + pct.toFixed(1) + '%"></div></div>'
-      + '<span class="time" title="任务·秒 ' + Math.round(sec) + '；平均并发 ' + avg.toFixed(1) + ' 个任务">'
-      + fmtDuration(sec) + '<small style="opacity:.75"> ·' + avg.toFixed(1) + '</small></span>'
+      + '<span class="time" title="' + esc(title) + '">'
+      + fmtDuration(wall)
+      + '<small>任务·秒 ' + fmtDuration(task) + ' ·' + avg.toFixed(1) + '</small></span>'
       + '</div>';
   }).join('');
-  document.getElementById('status-meta').textContent = totalSec
-    ? ('合计 ' + fmtDuration(totalSec) + ' 任务·秒（非墙钟）')
+  document.getElementById('status-meta').textContent = (totalWall || totalTask)
+    ? ('墙钟合计 ' + fmtDuration(totalWall) + ' · 任务·秒 ' + fmtDuration(totalTask))
     : '等待更多采样';
   document.getElementById('status-meta').title =
-    '任务·秒 = Σ(该状态任务数 × 采样间隔)。例如 100 个做种 × 60 秒 = 6000 任务·秒。旁注为平均并发任务数。';
+    '墙钟秒：该状态至少有 1 个任务的累计时间。任务·秒：Σ(状态任务数 × 间隔)。例如 100 做种 × 60s = 6000 任务·秒。';
 
   const dl = speedCell(g.dlSpeed);
   const up = speedCell(g.upSpeed);
@@ -2720,30 +3137,7 @@ function renderStatsDaily(data) {
       + '</div>';
   }).join('');
 
-  const body = document.getElementById('tracker-stats-body');
-  const trackers = data.trackers || [];
-  if (!trackers.length) {
-    body.innerHTML = '<tr><td colspan="11" class="stats-empty">暂无 Tracker 明细。保持服务运行后会按采样累计。</td></tr>';
-    return;
-  }
-  body.innerHTML = trackers.map((t) => {
-    const color = trackerColorClassForHost(t.host);
-    const seedSec = (t.statusSeconds || {}).seeding || 0;
-    const dlSec = (t.statusSeconds || {}).downloading || 0;
-    return '<tr>'
-      + '<td class="host ' + color + '" title="' + esc(t.host) + '">' + esc(t.host) + '</td>'
-      + '<td class="num">' + fmtBytes(t.uploaded || 0) + '</td>'
-      + '<td class="num">' + fmtBytes(t.downloaded || 0) + '</td>'
-      + '<td class="num">' + fmtRatio(t.ratio) + '</td>'
-      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).avg || 0) + '</td>'
-      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).max || 0) + '</td>'
-      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).avg || 0) + '</td>'
-      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).max || 0) + '</td>'
-      + '<td class="num">' + (t.torrentCountAvg || 0).toFixed(1) + ' / ' + Math.round(t.torrentCountMax || 0) + '</td>'
-      + '<td class="num">' + fmtDuration(seedSec) + '</td>'
-      + '<td class="num">' + fmtDuration(dlSec) + '</td>'
-      + '</tr>';
-  }).join('');
+  renderTrackerTable(data);
 }
 
 function renderStatsHistory(days, activeDate) {
@@ -2757,9 +3151,12 @@ function renderStatsHistory(days, activeDate) {
     const ulH = Math.max(2, ((d.uploaded || 0) / maxTraffic) * 100);
     const dlH = Math.max(2, ((d.downloaded || 0) / maxTraffic) * 100);
     const active = d.date === activeDate ? ' active' : '';
-    const title = d.date + ' 上传 ' + fmtBytes(d.uploaded || 0) + ' / 下载 ' + fmtBytes(d.downloaded || 0);
+    const cmpA = d.date === activeDate ? ' compare-a' : '';
+    const cmpB = statsCompareDate && d.date === statsCompareDate ? ' compare-b' : '';
+    const title = d.date + ' 上传 ' + fmtBytes(d.uploaded || 0) + ' / 下载 ' + fmtBytes(d.downloaded || 0)
+      + (statsCompareDate ? '（Shift+单击设为对比日）' : '（单击选日，Shift+单击对比）');
     const md = String(d.date || '').slice(5);
-    return '<div class="history-bar' + active + '" data-date="' + esc(d.date) + '" title="' + esc(title) + '">'
+    return '<div class="history-bar' + active + cmpA + cmpB + '" data-date="' + esc(d.date) + '" title="' + esc(title) + '">'
       + '<div class="bars">'
       + '<div class="seg ul" style="height:' + ulH.toFixed(1) + '%"></div>'
       + '<div class="seg dl" style="height:' + dlH.toFixed(1) + '%"></div>'
@@ -2769,6 +3166,50 @@ function renderStatsHistory(days, activeDate) {
   }).join('');
 }
 
+function findSummaryDay(date) {
+  return (statsSummary || []).find((d) => d.date === date) || null;
+}
+
+function renderComparePanel() {
+  const panel = document.getElementById('compare-panel');
+  const clearBtn = document.getElementById('stats-clear-compare');
+  if (!panel) return;
+  if (!statsCompareDate || !statsDate || statsCompareDate === statsDate) {
+    panel.classList.remove('show');
+    panel.innerHTML = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    return;
+  }
+  const a = findSummaryDay(statsDate);
+  const b = findSummaryDay(statsCompareDate);
+  if (!a || !b) {
+    panel.classList.add('show');
+    panel.innerHTML = '<div>对比需要两日均在近 14 日摘要中。当前：' + esc(statsDate) + ' vs ' + esc(statsCompareDate) + '</div>';
+    if (clearBtn) clearBtn.style.display = '';
+    return;
+  }
+  const dUp = (a.uploaded || 0) - (b.uploaded || 0);
+  const dDl = (a.downloaded || 0) - (b.downloaded || 0);
+  const dSamples = (a.sampleCount || 0) - (b.sampleCount || 0);
+  const cls = (n) => (n > 0 ? 'pos' : (n < 0 ? 'neg' : ''));
+  const signed = (n, fmt) => {
+    const sign = n > 0 ? '+' : '';
+    return '<span class="' + cls(n) + '">' + sign + fmt(n) + '</span>';
+  };
+  panel.classList.add('show');
+  panel.innerHTML = '<div><b>' + esc(statsDate) + '</b> 对比 <b>' + esc(statsCompareDate) + '</b>（差值 = 主日 − 对比日）</div>'
+    + '<div class="cmp-grid">'
+    + '<div class="cmp-item">上传差值<b>' + signed(dUp, fmtBytes) + '</b></div>'
+    + '<div class="cmp-item">下载差值<b>' + signed(dDl, fmtBytes) + '</b></div>'
+    + '<div class="cmp-item">主日上传<b>' + fmtBytes(a.uploaded || 0) + '</b></div>'
+    + '<div class="cmp-item">对比日上传<b>' + fmtBytes(b.uploaded || 0) + '</b></div>'
+    + '<div class="cmp-item">主日下载<b>' + fmtBytes(a.downloaded || 0) + '</b></div>'
+    + '<div class="cmp-item">对比日下载<b>' + fmtBytes(b.downloaded || 0) + '</b></div>'
+    + '<div class="cmp-item">采样差<b>' + signed(dSamples, (n) => String(n)) + '</b></div>'
+    + '</div>';
+  if (clearBtn) clearBtn.style.display = '';
+}
+
 function bindStatsUi() {
   const dateInput = document.getElementById('stats-date');
   const prev = document.getElementById('stats-prev-day');
@@ -2776,6 +3217,12 @@ function bindStatsUi() {
   const todayBtn = document.getElementById('stats-today-btn');
   const refreshBtn = document.getElementById('stats-refresh-btn');
   const chart = document.getElementById('history-chart');
+  const search = document.getElementById('tracker-search');
+  const trafficOnly = document.getElementById('tracker-traffic-only');
+  const exportJson = document.getElementById('stats-export-json');
+  const exportCsv = document.getElementById('stats-export-csv');
+  const clearCompare = document.getElementById('stats-clear-compare');
+  const table = document.getElementById('tracker-stats-table');
 
   if (dateInput) {
     dateInput.addEventListener('change', () => {
@@ -2802,25 +3249,87 @@ function bindStatsUi() {
     void loadStatsPage(false);
   });
   if (refreshBtn) refreshBtn.addEventListener('click', async () => {
+    if (statsRefreshing) return;
+    statsRefreshing = true;
+    refreshBtn.classList.add('busy');
+    refreshBtn.disabled = true;
+    const oldText = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '采样中…';
     try {
       await apiJson('/api/stats/sample', { method: 'POST', body: '{}' });
       await loadStatsPage(false);
+      await refreshStatsHealth();
+      showStatsToast('采样完成');
     } catch (e) {
-      alert(e.message || '采样失败');
+      const msg = e.status === 429
+        ? (e.message || '采样过于频繁，请稍后再试')
+        : (e.message || '采样失败');
+      showStatsToast(msg, true);
+    } finally {
+      statsRefreshing = false;
+      refreshBtn.classList.remove('busy');
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = oldText;
     }
   });
   if (chart) {
     chart.addEventListener('click', (ev) => {
       const bar = ev.target.closest('[data-date]');
       if (!bar) return;
-      statsDate = bar.getAttribute('data-date');
+      const date = bar.getAttribute('data-date');
+      if (ev.shiftKey) {
+        if (date === statsDate) {
+          showStatsToast('对比日不能与当前日相同', true);
+          return;
+        }
+        statsCompareDate = date === statsCompareDate ? '' : date;
+        renderStatsHistory(statsSummary, statsDate);
+        renderComparePanel();
+        return;
+      }
+      statsDate = date;
       if (dateInput) dateInput.value = statsDate;
       void loadStatsPage(false);
+    });
+  }
+  if (clearCompare) clearCompare.addEventListener('click', () => {
+    statsCompareDate = '';
+    renderStatsHistory(statsSummary, statsDate);
+    renderComparePanel();
+  });
+  if (search) {
+    search.addEventListener('input', () => {
+      statsTrackerQuery = search.value || '';
+      if (statsLastDaily) renderTrackerTable(statsLastDaily);
+    });
+  }
+  if (trafficOnly) {
+    trafficOnly.addEventListener('change', () => {
+      statsTrafficOnly = Boolean(trafficOnly.checked);
+      if (statsLastDaily) renderTrackerTable(statsLastDaily);
+    });
+  }
+  if (exportJson) exportJson.addEventListener('click', exportStatsJson);
+  if (exportCsv) exportCsv.addEventListener('click', exportStatsCsv);
+  if (table) {
+    table.addEventListener('click', (ev) => {
+      const th = ev.target.closest('th.sortable');
+      if (!th) return;
+      const key = th.getAttribute('data-sort');
+      if (!key) return;
+      if (statsSortKey === key) {
+        statsSortDir = statsSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        statsSortKey = key;
+        statsSortDir = key === 'host' ? 'asc' : 'desc';
+      }
+      if (statsLastDaily) renderTrackerTable(statsLastDaily);
     });
   }
 }
 
 bindStatsUi();
+
 
 </script>
 </body>

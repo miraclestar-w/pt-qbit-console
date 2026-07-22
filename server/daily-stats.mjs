@@ -77,6 +77,7 @@ function emptyTrackerBucket() {
     dlSpeed: emptySpeedStats(),
     upSpeed: emptySpeedStats(),
     statusSeconds: emptyStatusMap(),
+    statusWallSeconds: emptyStatusMap(),
     statusCountSum: emptyCountsMap()
   };
 }
@@ -104,6 +105,7 @@ function emptyDay(date) {
       dlSpeed: emptySpeedStats(),
       upSpeed: emptySpeedStats(),
       statusSeconds: emptyStatusMap(),
+      statusWallSeconds: emptyStatusMap(),
       statusCountSum: emptyCountsMap()
     },
     trackers: {},
@@ -152,6 +154,7 @@ function ensureTracker(raw) {
     dlSpeed: ensureSpeed(raw.dlSpeed),
     upSpeed: ensureSpeed(raw.upSpeed),
     statusSeconds: ensureStatus(raw.statusSeconds),
+    statusWallSeconds: ensureStatus(raw.statusWallSeconds),
     statusCountSum: ensureCounts(raw.statusCountSum)
   };
 }
@@ -205,6 +208,7 @@ function normalizeDay(raw, date) {
     day.global.dlSpeed = ensureSpeed(raw.global.dlSpeed);
     day.global.upSpeed = ensureSpeed(raw.global.upSpeed);
     day.global.statusSeconds = ensureStatus(raw.global.statusSeconds);
+    day.global.statusWallSeconds = ensureStatus(raw.global.statusWallSeconds);
     day.global.statusCountSum = ensureCounts(raw.global.statusCountSum);
   }
   day.trackers = {};
@@ -310,6 +314,7 @@ function finalizeDayView(day) {
         dlSpeed: finalizeSpeed(t.dlSpeed),
         upSpeed: finalizeSpeed(t.upSpeed),
         statusSeconds: t.statusSeconds,
+        statusWallSeconds: t.statusWallSeconds || emptyStatusMap(),
         statusAvg
       };
     })
@@ -345,8 +350,11 @@ function finalizeDayView(day) {
       dlSpeed: finalizeSpeed(g.dlSpeed),
       upSpeed: finalizeSpeed(g.upSpeed),
       statusSeconds: g.statusSeconds,
+      statusWallSeconds: g.statusWallSeconds || emptyStatusMap(),
       statusAvg,
-      seedingRelatedSeconds
+      seedingRelatedSeconds,
+      seedingRelatedWallSeconds:
+        numberOrAny(g.statusWallSeconds?.seeding) + numberOrAny(g.statusWallSeconds?.stalled_up)
     },
     trackers
   };
@@ -364,6 +372,7 @@ export class DailyStatsCollector {
     this.forceMinIntervalMs = options.forceMinIntervalMs ?? 10_000;
     this.logger = options.logger || (() => {});
     this.timer = null;
+    this.intervalTimer = null;
     this.inflight = null;
     this.lastForceAt = 0;
     this.cache = new Map();
@@ -371,19 +380,114 @@ export class DailyStatsCollector {
     this.dirty = new Set();
     this.saveTimer = null;
     this.stopped = false;
+    // Live cache from dashboard maindata (avoids extra torrents/info when fresh)
+    this.liveTorrents = null;
+    this.liveTransfer = null;
+    this.lastIngestAt = 0;
+    this.trackerByHash = new Map();
+    this.lastSampleAt = 0;
+    this.lastSampleDurationMs = 0;
+    this.lastSampleSource = "none";
+    this.successCount = 0;
+    this.failCount = 0;
+    this.failStreak = 0;
+    this.lastError = null;
+    this.currentIntervalMs = this.sampleMs;
+  }
+
+  /** Merge maindata / transfer into live cache for zero-extra-API sampling. */
+  ingestLive({ torrents, transfer, serverState } = {}) {
+    if (this.stopped) return;
+    let list = null;
+    if (Array.isArray(torrents)) {
+      list = torrents;
+    } else if (torrents && typeof torrents === "object") {
+      list = Object.entries(torrents).map(([hash, row]) => ({
+        ...(row || {}),
+        hash: (row && row.hash) || hash
+      }));
+    }
+    if (list) {
+      this.liveTorrents = list;
+      for (const t of list) {
+        const hash = String(t.hash || "").toLowerCase();
+        const tr = String(t.tracker || "").trim();
+        if (hash && tr) this.trackerByHash.set(hash, tr);
+      }
+    }
+    const ss = serverState || {};
+    const tr = transfer || {};
+    this.liveTransfer = {
+      alltime_dl: numberOrAny(ss.alltime_dl ?? tr.alltime_dl ?? tr.alltimeDl),
+      alltime_ul: numberOrAny(ss.alltime_ul ?? tr.alltime_ul ?? tr.alltimeUl),
+      dl_info_speed: Math.max(0, numberOrAny(ss.dl_info_speed ?? tr.dl_info_speed)),
+      up_info_speed: Math.max(0, numberOrAny(ss.up_info_speed ?? tr.up_info_speed)),
+      free_space_on_disk:
+        ss.free_space_on_disk != null
+          ? numberOrAny(ss.free_space_on_disk)
+          : tr.free_space_on_disk != null
+            ? numberOrAny(tr.free_space_on_disk)
+            : null
+    };
+    this.lastIngestAt = Date.now();
+    // Opportunistic sample when interval elapsed and idle
+    if (
+      !this.inflight &&
+      this.lastSampleAt > 0 &&
+      Date.now() - this.lastSampleAt >= this.currentIntervalMs
+    ) {
+      void this.sampleSafe();
+    }
+  }
+
+  getHealth() {
+    return {
+      running: Boolean(this.timer) && !this.stopped,
+      sampleMs: this.sampleMs,
+      currentIntervalMs: this.currentIntervalMs,
+      maxGapMs: this.maxGapMs,
+      forceMinIntervalMs: this.forceMinIntervalMs,
+      lastSampleAt: this.lastSampleAt || null,
+      lastSampleDurationMs: this.lastSampleDurationMs,
+      lastSampleSource: this.lastSampleSource,
+      lastIngestAt: this.lastIngestAt || null,
+      liveTorrentCount: Array.isArray(this.liveTorrents) ? this.liveTorrents.length : 0,
+      trackerCacheSize: this.trackerByHash.size,
+      successCount: this.successCount,
+      failCount: this.failCount,
+      failStreak: this.failStreak,
+      lastError: this.lastError,
+      inflight: Boolean(this.inflight),
+      dirtyDays: this.dirty.size
+    };
   }
 
   start() {
     if (this.timer || this.stopped) return;
     this.logger(`[stats] collector started, interval ${this.sampleMs}ms`);
-    setTimeout(() => { void this.sampleSafe(); }, 3_000);
-    this.timer = setInterval(() => { void this.sampleSafe(); }, this.sampleMs);
+    this.currentIntervalMs = this.sampleMs;
+    const tick = () => {
+      void this.sampleSafe().finally(() => this._scheduleNext());
+    };
+    this.timer = setTimeout(tick, 3_000);
+    if (typeof this.timer.unref === "function") this.timer.unref();
+  }
+
+  _scheduleNext() {
+    if (this.stopped) return;
+    if (this.timer) clearTimeout(this.timer);
+    // Backoff on failures: sampleMs * 2^streak capped at 10min
+    const factor = Math.min(8, Math.max(0, this.failStreak));
+    this.currentIntervalMs = Math.min(10 * 60_000, this.sampleMs * (2 ** factor));
+    this.timer = setTimeout(() => {
+      void this.sampleSafe().finally(() => this._scheduleNext());
+    }, this.currentIntervalMs);
     if (typeof this.timer.unref === "function") this.timer.unref();
   }
 
   stop() {
     this.stopped = true;
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = null;
@@ -560,7 +664,7 @@ export class DailyStatsCollector {
       if (force) this.lastForceAt = Date.now();
       return result;
     }
-    this.inflight = this._sample()
+    this.inflight = this._sample({ forceApi: force })
       .then((view) => {
         if (force) this.lastForceAt = Date.now();
         return view;
@@ -579,24 +683,76 @@ export class DailyStatsCollector {
     return this.sampleSafe({ force: false });
   }
 
-  async _sample() {
-    const now = Date.now();
+  async _sample(opts = {}) {
+    const forceApi = Boolean(opts.forceApi);
+    const started = Date.now();
+    const now = started;
     const date = this.dayKey();
-    const [torrentsRaw, transfer] = await Promise.all([
-      this.fetchTorrents(),
-      this.fetchTransfer().catch(() => ({}))
-    ]);
-    const torrents = Array.isArray(torrentsRaw) ? torrentsRaw : [];
+    let torrents = [];
+    let transfer = {};
+    let source = "api";
+    const liveAge = this.lastIngestAt ? now - this.lastIngestAt : Infinity;
+    // Only use dashboard-fed cache when it is fresh AND at least as new as last sample
+    // (or no sample yet). Prevents reusing a stale API snapshot as "live".
+    const liveFresh =
+      !forceApi &&
+      Array.isArray(this.liveTorrents) &&
+      this.liveTorrents.length > 0 &&
+      this.lastIngestAt > 0 &&
+      liveAge <= this.sampleMs * 2.5 &&
+      (this.lastSampleAt <= 0 || this.lastIngestAt >= this.lastSampleAt);
+
+    try {
+      if (liveFresh) {
+        torrents = this.liveTorrents;
+        transfer = this.liveTransfer || {};
+        source = "maindata_cache";
+      } else {
+        const [torrentsRaw, transferRaw] = await Promise.all([
+          this.fetchTorrents(),
+          this.fetchTransfer().catch(() => ({}))
+        ]);
+        torrents = Array.isArray(torrentsRaw) ? torrentsRaw : [];
+        transfer = transferRaw || {};
+        source = "api";
+        // Refresh tracker/live maps for health display, but do NOT bump lastIngestAt.
+        // lastIngestAt is owned by ingestLive (dashboard maindata). Bumping it here
+        // would freeze scheduled samples on the same API payload for ~sampleMs*2.5.
+        this.liveTorrents = torrents;
+        if (transfer && typeof transfer === "object") {
+          this.liveTransfer = {
+            ...(this.liveTransfer || {}),
+            ...transfer
+          };
+        }
+        for (const t of torrents) {
+          const hash = String(t.hash || "").toLowerCase();
+          const tr = String(t.tracker || "").trim();
+          if (hash && tr) this.trackerByHash.set(hash, tr);
+        }
+      }
+    } catch (error) {
+      this.failCount += 1;
+      this.failStreak += 1;
+      this.lastError = error.message || String(error);
+      this.lastSampleSource = "error";
+      this.lastSampleDurationMs = Date.now() - started;
+      throw error;
+    }
+
     const day = this.loadDay(date, { keepSnapshot: true });
 
     const snapTorrents = Object.create(null);
     for (const t of torrents) {
       const hash = String(t.hash || "").toLowerCase();
       if (!hash) continue;
+      let tracker = String(t.tracker || "").trim();
+      if (!tracker && this.trackerByHash.has(hash)) tracker = this.trackerByHash.get(hash);
+      if (tracker) this.trackerByHash.set(hash, tracker);
       snapTorrents[hash] = {
         u: numberOrAny(t.uploaded),
         d: numberOrAny(t.downloaded),
-        t: trackerHost(t.tracker),
+        t: trackerHost(tracker),
         dlspeed: Math.max(0, numberOrAny(t.dlspeed)),
         upspeed: Math.max(0, numberOrAny(t.upspeed)),
         kind: statusKind(t.state, t.progress)
@@ -606,7 +762,7 @@ export class DailyStatsCollector {
     const transferSnap = {
       alltime_dl: numberOrAny(transfer.alltime_dl ?? transfer.alltimeDl),
       alltime_ul: numberOrAny(transfer.alltime_ul ?? transfer.alltimeUl),
-      dl_info_speed: Math.max(0, numberOrAny(transfer.dl_info_speed)),
+      dl_info_speed: Math.max(0, numberOrAny(transfer.dl_info_speed ?? transfer.dl_info_speed)),
       up_info_speed: Math.max(0, numberOrAny(transfer.up_info_speed)),
       free_space_on_disk:
         transfer.free_space_on_disk != null ? numberOrAny(transfer.free_space_on_disk) : null
@@ -699,10 +855,13 @@ export class DailyStatsCollector {
       }
     }
 
+    if (!day.global.statusWallSeconds) day.global.statusWallSeconds = emptyStatusMap();
     if (dtSec > 0) {
       for (const k of STATUS_KEYS) {
-        day.global.statusSeconds[k] += (globalStatusCounts[k] || 0) * dtSec;
-        day.global.statusCountSum[k] += globalStatusCounts[k] || 0;
+        const n = globalStatusCounts[k] || 0;
+        day.global.statusSeconds[k] += n * dtSec;
+        if (n > 0) day.global.statusWallSeconds[k] += dtSec;
+        day.global.statusCountSum[k] += n;
       }
     } else {
       for (const k of STATUS_KEYS) {
@@ -724,10 +883,13 @@ export class DailyStatsCollector {
         if (live.n > bucket.torrentCountMax) bucket.torrentCountMax = live.n;
         pushSpeed(bucket.dlSpeed, live.dlSpeed);
         pushSpeed(bucket.upSpeed, live.upSpeed);
+        if (!bucket.statusWallSeconds) bucket.statusWallSeconds = emptyStatusMap();
         if (dtSec > 0) {
           for (const k of STATUS_KEYS) {
-            bucket.statusSeconds[k] += (live.counts[k] || 0) * dtSec;
-            bucket.statusCountSum[k] += live.counts[k] || 0;
+            const n = live.counts[k] || 0;
+            bucket.statusSeconds[k] += n * dtSec;
+            if (n > 0) bucket.statusWallSeconds[k] += dtSec;
+            bucket.statusCountSum[k] += n;
           }
         } else {
           for (const k of STATUS_KEYS) {
@@ -760,8 +922,21 @@ export class DailyStatsCollector {
       )
     };
 
+    // Drop tracker cache entries for hashes no longer present (bound memory)
+    if (this.trackerByHash.size > Object.keys(snapTorrents).length * 2) {
+      for (const hash of [...this.trackerByHash.keys()]) {
+        if (!snapTorrents[hash]) this.trackerByHash.delete(hash);
+      }
+    }
+
     this.cache.set(date, day);
     this.markDirty(date);
+    this.successCount += 1;
+    this.failStreak = 0;
+    this.lastError = null;
+    this.lastSampleAt = now;
+    this.lastSampleDurationMs = Date.now() - started;
+    this.lastSampleSource = source;
     return finalizeDayView(day);
   }
 }
