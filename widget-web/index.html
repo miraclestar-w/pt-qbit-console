@@ -275,12 +275,12 @@ html, body {
   </section>
 
   <footer class="z ft">
-    <div class="s dl" title="累计下载">
-      <div class="k">总下载</div>
+    <div class="s dl" id="footDl" title="优先显示今日下载（需 Console 统计服务）">
+      <div class="k" id="labelDl">总下载</div>
       <div class="v" id="totalDl">---</div>
     </div>
-    <div class="s ul" title="累计上传">
-      <div class="k">总上传</div>
+    <div class="s ul" id="footUl" title="优先显示今日上传（需 Console 统计服务）">
+      <div class="k" id="labelUl">总上传</div>
       <div class="v" id="totalUl">---</div>
     </div>
     <div class="s disk" title="保存路径磁盘剩余空间">
@@ -323,6 +323,10 @@ const ids = {
   barProg: document.getElementById('barProg'),
   totalDl: document.getElementById('totalDl'),
   totalUl: document.getElementById('totalUl'),
+  labelDl: document.getElementById('labelDl'),
+  labelUl: document.getElementById('labelUl'),
+  footDl: document.getElementById('footDl'),
+  footUl: document.getElementById('footUl'),
   freeSpace: document.getElementById('freeSpace'),
   contextMenu: document.getElementById('contextMenu'),
 };
@@ -451,6 +455,8 @@ function setOffline(reason) {
   setDownloadProgress(0, 0);
   ids.totalDl.textContent = '---';
   ids.totalUl.textContent = '---';
+  if (ids.labelDl) ids.labelDl.textContent = '总下载';
+  if (ids.labelUl) ids.labelUl.textContent = '总上传';
   ids.freeSpace.textContent = '---';
   lastFreeSpace = null;
   ids.cardDl.className = 'sp dl';
@@ -486,8 +492,26 @@ function updateData(data) {
   ids.statSt.textContent = String(nSt);
   ids.statEr.textContent = String(nEr);
   setDownloadProgress(nDl, progressPct);
-  ids.totalDl.textContent = fmtSize(d.totalDl);
-  ids.totalUl.textContent = fmtSize(d.totalUl);
+  // Prefer console daily stats; fall back to all-time totals
+  const hasToday = d.todayUl != null || d.todayDl != null;
+  if (hasToday) {
+    ids.labelDl.textContent = '今日↓';
+    ids.labelUl.textContent = '今日↑';
+    ids.totalDl.textContent = fmtSize(d.todayDl);
+    ids.totalUl.textContent = fmtSize(d.todayUl);
+    const tip = (d.todayDate || '今日')
+      + ' · 全时 ↓' + fmtSize(d.totalDl) + ' ↑' + fmtSize(d.totalUl)
+      + (d.sessionDl != null ? ' · 会话 ↓' + fmtSize(d.sessionDl) + ' ↑' + fmtSize(d.sessionUl) : '');
+    if (ids.footDl) ids.footDl.title = tip;
+    if (ids.footUl) ids.footUl.title = tip;
+  } else {
+    ids.labelDl.textContent = '总下载';
+    ids.labelUl.textContent = '总上传';
+    ids.totalDl.textContent = fmtSize(d.totalDl);
+    ids.totalUl.textContent = fmtSize(d.totalUl);
+    if (ids.footDl) ids.footDl.title = '累计下载（全时）';
+    if (ids.footUl) ids.footUl.title = '累计上传（全时）';
+  }
   if (d.freeSpace != null && d.freeSpace !== '') {
     lastFreeSpace = d.freeSpace;
     ids.freeSpace.textContent = fmtSize(d.freeSpace);

@@ -667,6 +667,47 @@ app.get("/api/stats/summary", (request, response, next) => {
   }
 });
 
+app.get("/api/stats/today", (_request, response, next) => {
+  try {
+    response.json({
+      ok: true,
+      ...dailyStats.getTodayBrief()
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/stats/rollup", (request, response, next) => {
+  try {
+    const rawDays = Number(request.query.days);
+    const days = Number.isFinite(rawDays) ? Math.min(90, Math.max(1, Math.floor(rawDays))) : 7;
+    response.json({
+      ok: true,
+      today: todayKey(),
+      ...dailyStats.getRollup({ days })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/stats/top-trackers", (request, response, next) => {
+  try {
+    const rawDays = Number(request.query.days);
+    const rawLimit = Number(request.query.limit);
+    const days = Number.isFinite(rawDays) ? Math.min(90, Math.max(1, Math.floor(rawDays))) : 7;
+    const limit = Number.isFinite(rawLimit) ? Math.min(100, Math.max(1, Math.floor(rawLimit))) : 20;
+    response.json({
+      ok: true,
+      today: todayKey(),
+      ...dailyStats.getTopTrackers({ days, limit })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/stats/sample", async (_request, response, next) => {
   try {
     const view = await dailyStats.sampleSafe({ force: true });

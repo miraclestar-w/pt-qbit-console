@@ -641,10 +641,120 @@ export class DailyStatsCollector {
         torrentCountAvg: view.global.torrentCountAvg,
         torrentCountMax: view.global.torrentCountMax,
         statusSeconds: view.global.statusSeconds,
+        statusWallSeconds: view.global.statusWallSeconds,
+        seedingRelatedWallSeconds: view.global.seedingRelatedWallSeconds,
         trackerCount: view.trackers.length,
         updatedAt: view.updatedAt
       };
     });
+  }
+
+  /** Lightweight today snapshot for widgets / pollers. */
+  getTodayBrief() {
+    const date = this.dayKey();
+    const view = this.getDayView(date);
+    const g = view.global || {};
+    return {
+      date,
+      sampleCount: view.sampleCount || 0,
+      uploaded: g.uploaded || 0,
+      downloaded: g.downloaded || 0,
+      ratio: g.ratio,
+      upSpeedMax: (g.upSpeed && g.upSpeed.max) || 0,
+      dlSpeedMax: (g.dlSpeed && g.dlSpeed.max) || 0,
+      torrentCountMax: g.torrentCountMax || 0,
+      trackerCount: (view.trackers || []).length,
+      updatedAt: view.updatedAt || null,
+      lastSampleAt: this.lastSampleAt || null,
+      lastSampleSource: this.lastSampleSource || null
+    };
+  }
+
+  /**
+   * Aggregate per-tracker traffic across recent days.
+   * @param {{ days?: number, limit?: number }} opts
+   */
+  getTopTrackers({ days = 7, limit = 20 } = {}) {
+    const rawDays = Math.floor(Number(days));
+    const rawLimit = Math.floor(Number(limit));
+    const nDays = Number.isFinite(rawDays) ? Math.max(1, Math.min(90, rawDays)) : 7;
+    const nLimit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(100, rawLimit)) : 20;
+    const dayKeys = this.listDays().slice(0, nDays);
+    const map = new Map();
+    for (const date of dayKeys) {
+      const view = this.getDayView(date);
+      for (const t of view.trackers || []) {
+        const host = String(t.host || "").trim() || "未知";
+        let row = map.get(host);
+        if (!row) {
+          row = {
+            host,
+            uploaded: 0,
+            downloaded: 0,
+            daysActive: 0,
+            peakUploaded: 0,
+            peakDownloaded: 0
+          };
+          map.set(host, row);
+        }
+        const up = numberOrAny(t.uploaded);
+        const dl = numberOrAny(t.downloaded);
+        row.uploaded += up;
+        row.downloaded += dl;
+        if (up > 0 || dl > 0) row.daysActive += 1;
+        if (up > row.peakUploaded) row.peakUploaded = up;
+        if (dl > row.peakDownloaded) row.peakDownloaded = dl;
+      }
+    }
+    return {
+      days: nDays,
+      dayKeys,
+      trackers: [...map.values()]
+        .map((r) => ({
+          ...r,
+          ratio: safeRatio(r.uploaded, r.downloaded),
+          traffic: r.uploaded + r.downloaded
+        }))
+        .sort((a, b) => b.traffic - a.traffic)
+        .slice(0, nLimit)
+    };
+  }
+
+  /** Rollup totals for the last N collected days (newest first list). */
+  getRollup({ days = 7 } = {}) {
+    const rawDays = Math.floor(Number(days));
+    const nDays = Number.isFinite(rawDays) ? Math.max(1, Math.min(90, rawDays)) : 7;
+    const summary = this.getSummary({ limit: nDays });
+    let uploaded = 0;
+    let downloaded = 0;
+    let sampleCount = 0;
+    let peakUp = null;
+    let peakDl = null;
+    for (const d of summary) {
+      uploaded += numberOrAny(d.uploaded);
+      downloaded += numberOrAny(d.downloaded);
+      sampleCount += numberOrAny(d.sampleCount);
+      if (!peakUp || numberOrAny(d.uploaded) > peakUp.uploaded) {
+        peakUp = { date: d.date, uploaded: numberOrAny(d.uploaded) };
+      }
+      if (!peakDl || numberOrAny(d.downloaded) > peakDl.downloaded) {
+        peakDl = { date: d.date, downloaded: numberOrAny(d.downloaded) };
+      }
+    }
+    const count = summary.length || 0;
+    return {
+      days: nDays,
+      dayCount: count,
+      dayKeys: summary.map((d) => d.date),
+      uploaded,
+      downloaded,
+      ratio: safeRatio(uploaded, downloaded),
+      sampleCount,
+      avgUploaded: count ? uploaded / count : 0,
+      avgDownloaded: count ? downloaded / count : 0,
+      peakUploadDay: peakUp,
+      peakDownloadDay: peakDl
+    };
   }
 
   async sampleSafe(opts = {}) {

@@ -328,6 +328,65 @@ assertEq(c3.currentIntervalMs, 60_000, "interval resets to sampleMs");
 c3.stop();
 c2.stop();
 
+// --- today brief / rollup / top trackers ---
+// Persist in-memory days so listDays() sees multi-day history.
+collector.flushSync();
+// Point "today" at a day with known traffic for brief snapshot.
+currentDay = "2099-01-15";
+const brief = collector.getTodayBrief();
+assertEq(brief.date, "2099-01-15", "today brief date");
+assert(brief.uploaded > 0, "today brief uploaded");
+assert(brief.downloaded > 0, "today brief downloaded");
+assertEq(brief.ratio, safeRatio(brief.uploaded, brief.downloaded), "today brief ratio");
+assert(typeof brief.sampleCount === "number" && brief.sampleCount >= 2, "today brief samples");
+assert(typeof brief.trackerCount === "number" && brief.trackerCount >= 2, "today brief trackers");
+assert("upSpeedMax" in brief && "dlSpeedMax" in brief, "today brief speed max");
+
+const rollup = collector.getRollup({ days: 7 });
+assertEq(rollup.days, 7, "rollup window");
+assert(rollup.dayCount >= 2, "rollup has multiple days");
+assert(Array.isArray(rollup.dayKeys) && rollup.dayKeys.length === rollup.dayCount, "rollup dayKeys");
+assert(rollup.uploaded >= 1550, "rollup uploaded includes day1");
+assert(rollup.downloaded >= 300, "rollup downloaded includes day1");
+assertEq(rollup.ratio, safeRatio(rollup.uploaded, rollup.downloaded), "rollup ratio");
+assert(rollup.avgUploaded > 0 && rollup.avgDownloaded > 0, "rollup avgs");
+assert(rollup.peakUploadDay && rollup.peakUploadDay.date, "peak upload day");
+assert(rollup.peakDownloadDay && rollup.peakDownloadDay.date, "peak download day");
+assert(rollup.sampleCount >= 3, "rollup sampleCount sum");
+
+const top = collector.getTopTrackers({ days: 7, limit: 5 });
+assertEq(top.days, 7, "top days window");
+assert(Array.isArray(top.dayKeys) && top.dayKeys.length >= 1, "top dayKeys");
+assert(top.trackers.length >= 1, "top trackers non-empty");
+assert(top.trackers.length <= 5, "top limit");
+// Sorted by traffic desc
+for (let i = 1; i < top.trackers.length; i++) {
+  assert(top.trackers[i - 1].traffic >= top.trackers[i].traffic, "top sorted by traffic");
+}
+const topHosts = Object.fromEntries(top.trackers.map((t) => [t.host, t]));
+assert(topHosts["a.example"], "top includes a.example");
+assert(topHosts["a.example"].uploaded >= 1500, "a.example cum uploaded");
+assertEq(
+  topHosts["a.example"].ratio,
+  safeRatio(topHosts["a.example"].uploaded, topHosts["a.example"].downloaded),
+  "top tracker ratio"
+);
+assert(topHosts["a.example"].daysActive >= 1, "daysActive");
+assert(topHosts["a.example"].peakUploaded >= 1500, "peakUploaded");
+
+// clamp days/limit
+const topClamp = collector.getTopTrackers({ days: 999, limit: 1 });
+assertEq(topClamp.days, 90, "days clamp max 90");
+assertEq(topClamp.trackers.length, 1, "limit clamp");
+const rollupClamp = collector.getRollup({ days: 0 });
+assertEq(rollupClamp.days, 1, "rollup days min 1");
+
+// summary includes wall seconds fields
+const sum = collector.getSummary({ limit: 5 });
+assert(sum.length >= 1, "summary length");
+assert("statusWallSeconds" in sum[0], "summary statusWallSeconds");
+assert("seedingRelatedWallSeconds" in sum[0], "summary seedingRelatedWallSeconds");
+
 collector.stop();
 assert(fs.existsSync(file), "day file exists after stop");
 const raw2 = JSON.parse(fs.readFileSync(file, "utf8"));

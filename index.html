@@ -1506,6 +1506,75 @@
     }
     .stats-toast.err { border-color: rgba(239,68,68,0.45); color: #fecaca; }
 
+    .history-range {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .history-range .btn.active {
+      border-color: var(--cyan);
+      color: var(--cyan);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    .rollup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .rollup-item {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .rollup-item .k {
+      color: var(--text-3);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .rollup-item .v {
+      font-size: 15px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .rollup-item .v.green { color: var(--green); }
+    .rollup-item .v.orange { color: var(--orange); }
+    .rollup-item .v.blue { color: var(--blue); }
+    .rollup-item .s {
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--text-3);
+    }
+    .top-trackers-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .top-tracker-row {
+      display: grid;
+      grid-template-columns: minmax(100px, 1.2fr) 1fr auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .top-tracker-row .host {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .top-tracker-row .bar-track { height: 6px; }
+    .top-tracker-row .nums {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+    .top-tracker-row .nums b { color: var(--green); font-weight: 650; }
+    .top-tracker-row .nums span { color: var(--orange); }
+
+
     .nav-item.page-nav .left svg { opacity: 0.9; }
     #view-torrents { display: contents; }
 
@@ -1795,8 +1864,13 @@
 
       <div class="stats-panel" style="margin-bottom:16px">
         <div class="stats-panel-head">
-          <h3>近 14 日流量</h3>
+          <h3 id="history-title">近 14 日流量</h3>
           <div class="history-toolbar">
+            <div class="history-range" id="history-range">
+              <button class="btn" type="button" data-range="7">7日</button>
+              <button class="btn active" type="button" data-range="14">14日</button>
+              <button class="btn" type="button" data-range="30">30日</button>
+            </div>
             <span class="meta">青=上传 · 橙=下载 · 单击选日 · Shift+单击对比</span>
             <button class="btn" type="button" id="stats-clear-compare" title="清除对比日" style="display:none">清除对比</button>
           </div>
@@ -1804,6 +1878,31 @@
         <div class="stats-panel-body">
           <div class="history-chart" id="history-chart"></div>
           <div class="compare-panel" id="compare-panel"></div>
+        </div>
+      </div>
+
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stats-panel">
+          <div class="stats-panel-head">
+            <h3 id="rollup-title">近 7 日汇总</h3>
+            <span class="meta" id="rollup-meta">基于已采集日期</span>
+          </div>
+          <div class="stats-panel-body">
+            <div class="rollup-grid" id="rollup-grid">
+              <div class="stats-empty" style="grid-column:1/-1;padding:20px">加载中…</div>
+            </div>
+          </div>
+        </div>
+        <div class="stats-panel">
+          <div class="stats-panel-head">
+            <h3 id="top-trackers-title">近 7 日 Top Tracker</h3>
+            <span class="meta">按上传+下载合计</span>
+          </div>
+          <div class="stats-panel-body">
+            <div class="top-trackers-list" id="top-trackers-list">
+              <div class="stats-empty" style="padding:20px">加载中…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2706,6 +2805,10 @@ let statsTrafficOnly = false;
 let statsSortKey = 'uploaded';
 let statsSortDir = 'desc';
 let statsHealthTimer = 0;
+let statsHistoryLimit = 14;
+let statsRollupDays = 7;
+let statsLastRollup = null;
+let statsLastTopTrackers = null;
 
 const STATUS_LABELS = {
   downloading: '下载',
@@ -3045,9 +3148,11 @@ async function loadStatsPage(forceSample = false) {
 
     const qs = new URLSearchParams({ date: statsDate });
     if (forceSample && today && statsDate === today) qs.set('sample', '1');
-    const [daily, summary] = await Promise.all([
+    const [daily, summary, rollup, topTrackers] = await Promise.all([
       apiJson('/api/stats/daily?' + qs.toString()),
-      apiJson('/api/stats/summary?limit=14')
+      apiJson('/api/stats/summary?limit=' + statsHistoryLimit),
+      apiJson('/api/stats/rollup?days=' + statsRollupDays),
+      apiJson('/api/stats/top-trackers?days=' + statsRollupDays + '&limit=8')
     ]);
     if (seq !== statsLoadSeq) return;
     if (requestedDate && statsDate && requestedDate !== statsDate && daily.date && daily.date !== statsDate) {
@@ -3055,9 +3160,14 @@ async function loadStatsPage(forceSample = false) {
     }
     statsSummary = (summary.days || []).slice().reverse();
     statsLastDaily = daily;
+    statsLastRollup = rollup;
+    statsLastTopTrackers = topTrackers;
     renderStatsDaily(daily);
     renderStatsHistory(statsSummary, statsDate);
     renderComparePanel();
+    renderRollup(rollup);
+    renderTopTrackers(topTrackers);
+    updateHistoryRangeUi();
     if (hint) {
       const intervalMin = Math.round((daysRes.sampleMs || 60000) / 60000);
       const gapMin = Math.round((daysRes.maxGapMs || 15 * 60_000) / 60000);
@@ -3166,6 +3276,66 @@ function renderStatsHistory(days, activeDate) {
   }).join('');
 }
 
+function updateHistoryRangeUi() {
+  const title = document.getElementById('history-title');
+  if (title) title.textContent = '近 ' + statsHistoryLimit + ' 日流量';
+  document.querySelectorAll('#history-range .btn').forEach((btn) => {
+    const n = Number(btn.getAttribute('data-range'));
+    btn.classList.toggle('active', n === statsHistoryLimit);
+  });
+  const rt = document.getElementById('rollup-title');
+  if (rt) rt.textContent = '近 ' + statsRollupDays + ' 日汇总';
+  const tt = document.getElementById('top-trackers-title');
+  if (tt) tt.textContent = '近 ' + statsRollupDays + ' 日 Top Tracker';
+}
+
+function renderRollup(data) {
+  const box = document.getElementById('rollup-grid');
+  const meta = document.getElementById('rollup-meta');
+  if (!box) return;
+  if (!data || !(data.dayCount > 0)) {
+    box.innerHTML = '<div class="stats-empty" style="grid-column:1/-1;padding:20px">暂无汇总，保持服务采集后会出现</div>';
+    if (meta) meta.textContent = '暂无数据';
+    return;
+  }
+  if (meta) meta.textContent = '覆盖 ' + data.dayCount + ' 天 · 采样 ' + (data.sampleCount || 0) + ' 次';
+  const peakUp = data.peakUploadDay || {};
+  const peakDl = data.peakDownloadDay || {};
+  box.innerHTML = [
+    ['总上传', fmtBytes(data.uploaded || 0), 'green', '日均 ' + fmtBytes(data.avgUploaded || 0)],
+    ['总下载', fmtBytes(data.downloaded || 0), 'orange', '日均 ' + fmtBytes(data.avgDownloaded || 0)],
+    ['综合分享率', fmtRatio(data.ratio), 'blue', (data.downloaded || 0) === 0 && (data.uploaded || 0) > 0 ? '纯上传区间' : 'Σ上传 / Σ下载'],
+    ['上传峰值日', peakUp.date ? String(peakUp.date).slice(5) : '-', '', peakUp.date ? fmtBytes(peakUp.uploaded || 0) : '-'],
+    ['下载峰值日', peakDl.date ? String(peakDl.date).slice(5) : '-', '', peakDl.date ? fmtBytes(peakDl.downloaded || 0) : '-']
+  ].map(([k, v, cls, s]) => {
+    return '<div class="rollup-item"><div class="k">' + k + '</div>'
+      + '<div class="v' + (cls ? ' ' + cls : '') + '">' + v + '</div>'
+      + '<div class="s">' + s + '</div></div>';
+  }).join('');
+}
+
+function renderTopTrackers(data) {
+  const box = document.getElementById('top-trackers-list');
+  if (!box) return;
+  const list = (data && data.trackers) || [];
+  if (!list.length) {
+    box.innerHTML = '<div class="stats-empty" style="padding:20px">暂无 Tracker 汇总</div>';
+    return;
+  }
+  const maxTraffic = Math.max(1, ...list.map((t) => t.traffic || ((t.uploaded || 0) + (t.downloaded || 0))));
+  box.innerHTML = list.map((t) => {
+    const traffic = t.traffic || ((t.uploaded || 0) + (t.downloaded || 0));
+    const pct = Math.max(2, Math.min(100, (traffic / maxTraffic) * 100));
+    const color = trackerColorClassForHost(t.host);
+    return '<div class="top-tracker-row">'
+      + '<div class="host ' + color + '" title="' + esc(t.host) + '">' + esc(t.host) + '</div>'
+      + '<div class="bar-track"><div class="bar-fill seeding" style="width:' + pct.toFixed(1) + '%"></div></div>'
+      + '<div class="nums" title="活跃 ' + (t.daysActive || 0) + ' 天 · 分享率 ' + fmtRatio(t.ratio) + '">'
+      + '<b>↑' + fmtBytes(t.uploaded || 0) + '</b> · <span>↓' + fmtBytes(t.downloaded || 0) + '</span></div>'
+      + '</div>';
+  }).join('');
+}
+
 function findSummaryDay(date) {
   return (statsSummary || []).find((d) => d.date === date) || null;
 }
@@ -3184,7 +3354,7 @@ function renderComparePanel() {
   const b = findSummaryDay(statsCompareDate);
   if (!a || !b) {
     panel.classList.add('show');
-    panel.innerHTML = '<div>对比需要两日均在近 14 日摘要中。当前：' + esc(statsDate) + ' vs ' + esc(statsCompareDate) + '</div>';
+    panel.innerHTML = '<div>对比需要两日均在当前历史范围内。当前：' + esc(statsDate) + ' vs ' + esc(statsCompareDate) + '</div>';
     if (clearBtn) clearBtn.style.display = '';
     return;
   }
@@ -3326,6 +3496,21 @@ function bindStatsUi() {
       if (statsLastDaily) renderTrackerTable(statsLastDaily);
     });
   }
+  const rangeBox = document.getElementById('history-range');
+  if (rangeBox) {
+    rangeBox.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-range]');
+      if (!btn) return;
+      const n = Number(btn.getAttribute('data-range'));
+      if (![7, 14, 30].includes(n)) return;
+      statsHistoryLimit = n;
+      // rollup/top trackers follow common windows: 7 always for 7, else 7 for 14/30 charts still use 7 rollup? Better: 7->7, 14->7, 30->14
+      statsRollupDays = n === 30 ? 14 : n;
+      updateHistoryRangeUi();
+      void loadStatsPage(false);
+    });
+  }
+  updateHistoryRangeUi();
 }
 
 bindStatsUi();

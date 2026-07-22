@@ -90,9 +90,12 @@ class Config:
     window_min_height: int = 180
     window_max_height: int = 480
     debug: bool = env_first("QBIT_DEBUG", "QB_DEBUG", default="").lower() in ("1", "true", "yes")
+    # Optional PT Console base URL for /api/stats/today (today UL/DL on widget footer)
+    console_url: str = env_first("CONSOLE_URL", "PT_CONSOLE_URL", default="http://127.0.0.1:8787")
 
     def __post_init__(self) -> None:
         self.qb_url = self.qb_url.strip().rstrip("/")
+        self.console_url = (self.console_url or "").strip().rstrip("/")
         timeout_raw = env_first("QBIT_TIMEOUT_MS", default="")
         if timeout_raw:
             try:
@@ -268,6 +271,8 @@ class WidgetApi:
         self._server_state: Dict[str, Any] = {}
         self._last_free_space: Optional[int] = None
         self._last_fit: tuple[int, int] = (0, 0)
+        self._today_cache: Dict[str, Any] = {}
+        self._today_fetched_at: float = 0.0
 
     def set_window(self, window: Any) -> None:
         self._window = window
@@ -301,6 +306,54 @@ class WidgetApi:
         except Exception as e:
             self._logger.debug("fit_window failed: %s", e)
             return {"ok": 0}
+
+    def _fetch_today_stats(self) -> Dict[str, Any]:
+        """Pull today UL/DL from PT Console daily stats (best-effort, cached ~15s)."""
+        now = time.time()
+        if self._today_cache and now - self._today_fetched_at < 15:
+            return self._today_cache
+        base = ""
+        if self._config is not None:
+            base = getattr(self._config, "console_url", "") or ""
+        if not base:
+            self._today_cache = {}
+            self._today_fetched_at = now
+            return {}
+        url = f"{base}/api/stats/today"
+        timeout = 2
+        try:
+            if USE_REQUESTS:
+                import requests as _req
+                r = _req.get(url, timeout=timeout)
+                if r.status_code != 200:
+                    raise RuntimeError(f"HTTP {r.status_code}")
+                data = r.json()
+            else:
+                import urllib.request
+                with urllib.request.urlopen(url, timeout=timeout) as resp:
+                    data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            if not isinstance(data, dict) or not data.get("ok", True):
+                raise RuntimeError("invalid today payload")
+            out = {
+                "todayUl": int(data.get("uploaded") or 0),
+                "todayDl": int(data.get("downloaded") or 0),
+                "todayRatio": data.get("ratio"),
+                "todayDate": data.get("date"),
+                "todaySamples": int(data.get("sampleCount") or 0),
+                "todayUpdatedAt": data.get("updatedAt"),
+                "todaySource": "console",
+            }
+            self._today_cache = out
+            self._today_fetched_at = now
+            return out
+        except Exception as e:
+            self._logger.debug("today stats unavailable: %s", e)
+            # keep stale cache briefly if any
+            if self._today_cache and now - self._today_fetched_at < 120:
+                return self._today_cache
+            self._today_cache = {}
+            self._today_fetched_at = now
+            return {}
 
     def get_data(self) -> Dict[str, Any]:
         """Fetch stats via sync/maindata (incremental when possible)."""
@@ -409,15 +462,30 @@ class WidgetApi:
             stats["ratio"],
         )
 
-        return {
+        try:
+            session_dl = int(ss.get("dl_info_data") or 0)
+        except (TypeError, ValueError):
+            session_dl = 0
+        try:
+            session_ul = int(ss.get("up_info_data") or 0)
+        except (TypeError, ValueError):
+            session_ul = 0
+
+        today = self._fetch_today_stats()
+        payload = {
             "online": True,
             "dl": dl_speed,
             "ul": ul_speed,
             "totalDl": total_dl,
             "totalUl": total_ul,
+            "sessionDl": session_dl,
+            "sessionUl": session_ul,
             "freeSpace": free_space,
             **stats,
         }
+        if today:
+            payload.update(today)
+        return payload
 
     def _analyze_torrents(self, torrents: list) -> Dict[str, Any]:
         n_dl = n_sd = n_st = n_er = 0
