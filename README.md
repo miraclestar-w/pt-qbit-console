@@ -152,6 +152,17 @@ Windows ????????? `start_widget.vbs` ? `run_widget.pyw`?
 | POST | `/api/torrents/add` | ???? |
 | POST | `/api/torrents/action` | ???? |
 | POST | `/api/transfer/limits` | ???? |
+| GET | `/api/stats/days` | list collected dates |
+| GET | `/api/stats/daily?date=` | daily stats per tracker |
+| GET | `/api/stats/summary` | multi-day summary |
+| POST | `/api/stats/sample` | force one sample now |
+
+### Daily stats
+
+- Server samples qB every `STATS_SAMPLE_MS` (default 60s) into `data/daily-stats/YYYY-MM-DD.json`
+- Metrics: global + per-tracker upload/download, status duration, speed min/max/avg
+- UI: sidebar page with date picker, status bars, speed min/max/avg, tracker table, 14-day chart
+- Keep Express running to accumulate history; optional env `STATS_RETENTION_DAYS` (default 90)
 
 ## ????
 

@@ -1,7 +1,8 @@
-import express from "express";
+﻿import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DailyStatsCollector } from "./daily-stats.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,6 +50,10 @@ const qbitUsername = process.env.QBIT_USERNAME || "admin";
 const qbitPassword = process.env.QBIT_PASSWORD || "admin";
 const qbitTimeoutMs = readIntEnv("QBIT_TIMEOUT_MS", 8000, { min: 1000, max: 120000 });
 const appInfoTtlMs = readIntEnv("APP_INFO_TTL_MS", 60 * 60 * 1000, { min: 60_000, max: 24 * 60 * 60 * 1000 });
+const statsSampleMs = readIntEnv("STATS_SAMPLE_MS", 60_000, { min: 15_000, max: 15 * 60_000 });
+const statsRetentionDays = readIntEnv("STATS_RETENTION_DAYS", 90, { min: 7, max: 730 });
+const statsForceMinIntervalMs = readIntEnv("STATS_FORCE_MIN_INTERVAL_MS", 10_000, { min: 3_000, max: 5 * 60_000 });
+const statsDataDir = path.resolve(__dirname, "../data/daily-stats");
 
 app.use(express.json({ limit: "2mb" }));
 
@@ -547,6 +552,87 @@ app.post("/api/transfer/limits", async (request, response, next) => {
   }
 });
 
+
+const dailyStats = new DailyStatsCollector({
+  dataDir: statsDataDir,
+  dayKey: todayKey,
+  sampleMs: statsSampleMs,
+  retentionDays: statsRetentionDays,
+  forceMinIntervalMs: statsForceMinIntervalMs,
+  logger: (msg) => console.log(msg),
+  fetchTorrents: async () => qbit.json("/api/v2/torrents/info"),
+  fetchTransfer: async () => qbit.json("/api/v2/transfer/info")
+});
+
+function parseDateParam(value, label = "date") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    throw new QbitError(`${label} 格式应为 YYYY-MM-DD`, 400);
+  }
+  const [y, m, d] = text.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (
+    dt.getUTCFullYear() !== y ||
+    dt.getUTCMonth() !== m - 1 ||
+    dt.getUTCDate() !== d
+  ) {
+    throw new QbitError(`${label} 不是有效日期`, 400);
+  }
+  return text;
+}
+
+app.get("/api/stats/days", (_request, response) => {
+  response.json({
+    ok: true,
+    days: dailyStats.listDays(),
+    today: todayKey(),
+    sampleMs: statsSampleMs,
+    retentionDays: statsRetentionDays
+  });
+});
+
+app.get("/api/stats/daily", async (request, response, next) => {
+  try {
+    const date = parseDateParam(request.query.date) || todayKey();
+    const sample = String(request.query.sample || "") === "1" || String(request.query.sample || "").toLowerCase() === "true";
+    if (sample && date === todayKey()) {
+      await dailyStats.sampleSafe({ force: true });
+    }
+    response.json({
+      ok: true,
+      ...dailyStats.getDayView(date)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/stats/summary", (request, response, next) => {
+  try {
+    const from = parseDateParam(request.query.from, "from") || "";
+    const to = parseDateParam(request.query.to, "to") || "";
+    const rawLimit = Number(request.query.limit);
+    const safeLimit = Number.isFinite(rawLimit) ? Math.min(365, Math.max(1, Math.floor(rawLimit))) : 30;
+    response.json({
+      ok: true,
+      today: todayKey(),
+      days: dailyStats.getSummary({ from, to, limit: safeLimit })
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/stats/sample", async (_request, response, next) => {
+  try {
+    const view = await dailyStats.sampleSafe({ force: true });
+    response.json({ ok: true, ...view });
+  } catch (error) {
+    next(error);
+  }
+});
+
 if (process.env.SERVE_STATIC === "true" || process.argv.includes("--static")) {
   const distPath = path.resolve(__dirname, "../dist");
   const indexPath = path.join(distPath, "index.html");
@@ -574,7 +660,29 @@ app.use((error, _request, response, _next) => {
   response.status(status).json(body);
 });
 
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   console.log(`PT qB proxy listening on http://127.0.0.1:${port}`);
   console.log(`qBittorrent targets: ${qbitUrls.join(" -> ")}`);
+  console.log(`Daily stats: every ${statsSampleMs}ms -> ${statsDataDir}`);
+  dailyStats.start();
 });
+
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal}, flushing daily stats...`);
+  try {
+    dailyStats.stop();
+  } catch (error) {
+    console.error(`[shutdown] dailyStats.stop failed: ${error.message}`);
+  }
+  server.close(() => {
+    process.exit(0);
+  });
+  const forceExit = setTimeout(() => process.exit(0), 5_000);
+  if (typeof forceExit.unref === "function") forceExit.unref();
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

@@ -1093,6 +1093,270 @@
       .toolbar { flex-wrap: wrap; }
       .search { min-width: 100%; }
     }
+  
+    /* --- Daily Stats Page --- */
+    .view-hidden { display: none !important; }
+    .stats-page {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 18px 28px;
+    }
+    .stats-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0 14px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      background: linear-gradient(180deg, var(--bg) 70%, transparent);
+    }
+    .stats-toolbar .date-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stats-toolbar input[type="date"] {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border-2);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+    .stats-toolbar .hint {
+      color: var(--text-3);
+      font-size: 12px;
+      margin-left: auto;
+    }
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .stats-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      min-height: 78px;
+    }
+    .stats-card .label {
+      color: var(--text-3);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .stats-card .value {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .stats-card .sub {
+      margin-top: 4px;
+      color: var(--text-3);
+      font-size: 11px;
+    }
+    .stats-card .value.green { color: var(--green); }
+    .stats-card .value.orange { color: var(--orange); }
+    .stats-card .value.blue { color: var(--blue); }
+    .stats-card .value.cyan { color: var(--cyan); }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 1100px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .stats-page { padding: 0 14px 20px; }
+    }
+    .stats-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .stats-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-panel-head h3 {
+      font-size: 13px;
+      font-weight: 650;
+    }
+    .stats-panel-head .meta {
+      color: var(--text-3);
+      font-size: 11px;
+    }
+    .stats-panel-body { padding: 12px 14px 14px; }
+    .status-bars { display: flex; flex-direction: column; gap: 10px; }
+    .status-row {
+      display: grid;
+      grid-template-columns: 72px 1fr 88px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .status-row .name { color: var(--text-2); }
+    .status-row .time {
+      color: var(--text-3);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .bar-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      overflow: hidden;
+    }
+    :root[data-theme="light"] .bar-track { background: #e2e8f0; }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      min-width: 0;
+      transition: width .25s ease;
+    }
+    .bar-fill.downloading { background: var(--blue); }
+    .bar-fill.seeding { background: var(--green); }
+    .bar-fill.paused { background: var(--text-3); }
+    .bar-fill.stalled,
+    .bar-fill.stalled_up { background: var(--orange); }
+    .bar-fill.stalled_dl { background: #d97706; }
+    .bar-fill.error { background: var(--red); }
+    .bar-fill.checking { background: var(--cyan); }
+    .bar-fill.other { background: #647084; }
+    .speed-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .speed-box {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .speed-box h4 {
+      font-size: 12px;
+      color: var(--text-2);
+      margin-bottom: 8px;
+    }
+    .speed-kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      padding: 3px 0;
+      color: var(--text-3);
+    }
+    .speed-kv b {
+      color: var(--text);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .history-chart {
+      height: 190px;
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding: 8px 2px 0;
+    }
+    .history-bar {
+      flex: 1;
+      min-width: 12px;
+      max-width: 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: stretch;
+      gap: 2px;
+      height: 100%;
+      cursor: pointer;
+      opacity: 0.88;
+    }
+    .history-bar:hover, .history-bar.active { opacity: 1; }
+    .history-bar .bars {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 2px;
+    }
+    .history-bar .date-label {
+      flex: 0 0 auto;
+      font-size: 10px;
+      line-height: 1.2;
+      color: var(--text-3);
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: clip;
+      padding-top: 4px;
+      user-select: none;
+    }
+    .history-bar.active .date-label { color: var(--text-1); font-weight: 600; }
+    .history-bar .seg {
+      width: 100%;
+      border-radius: 3px 3px 0 0;
+      min-height: 0;
+    }
+    .history-bar .seg.ul { background: var(--cyan); }
+    .history-bar .seg.dl { background: var(--orange); border-radius: 0; opacity: 0.85; }
+    .tracker-stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .tracker-stats-table th,
+    .tracker-stats-table td {
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .tracker-stats-table th {
+      color: var(--text-3);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      background: var(--card);
+      z-index: 1;
+    }
+    .tracker-stats-table td.num,
+    .tracker-stats-table th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .tracker-stats-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .tracker-stats-table .host {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-weight: 600;
+    }
+    .tracker-stats-wrap {
+      max-height: 420px;
+      overflow: auto;
+    }
+    .stats-empty {
+      padding: 40px 16px;
+      text-align: center;
+      color: var(--text-3);
+      font-size: 13px;
+    }
+    .nav-item.page-nav .left svg { opacity: 0.9; }
+    #view-torrents { display: contents; }
+
   </style>
 </head>
 <body>
@@ -1106,7 +1370,16 @@
       </div>
       <div class="sub" id="sidebar-url">连接中...</div>
     </div>
-    <nav class="sidebar-nav">
+        <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">页面</div>
+        <button class="nav-item page-nav active" id="nav-page-torrents" onclick="setAppView('torrents')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>种子控制台</span>
+        </button>
+        <button class="nav-item page-nav" id="nav-page-stats" onclick="setAppView('stats')">
+          <span class="left"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>每日统计</span>
+        </button>
+      </div>
       <div class="sidebar-section">
         <div class="sidebar-section-title">种子状态</div>
         <button class="nav-item active" onclick="setFilter('all')">
@@ -1202,6 +1475,8 @@
     </div>
 
     <div id="alert-box" class="alert" style="display:none"></div>
+
+    <div id="view-torrents">
 
     <!-- Header -->
     <header class="page-header">
@@ -1313,6 +1588,93 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    </div><!-- /view-torrents -->
+
+    <div id="view-stats" class="stats-page view-hidden">
+      <div class="stats-toolbar">
+        <div class="date-nav">
+          <button class="btn" type="button" id="stats-prev-day" title="前一天">‹</button>
+          <input type="date" id="stats-date" />
+          <button class="btn" type="button" id="stats-next-day" title="后一天">›</button>
+          <button class="btn" type="button" id="stats-today-btn">今天</button>
+        </div>
+        <button class="btn" type="button" id="stats-refresh-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          刷新采样
+        </button>
+        <span class="hint" id="stats-hint">服务端每分钟采样；跨日短间隔会继承昨日快照避免丢流量；状态为任务·秒</span>
+      </div>
+
+      <div class="stats-cards" id="stats-cards">
+        <div class="stats-card"><div class="label">当日上传</div><div class="value green" id="s-up">-</div><div class="sub" id="s-up-sub">-</div></div>
+        <div class="stats-card"><div class="label">当日下载</div><div class="value orange" id="s-dl">-</div><div class="sub" id="s-dl-sub">-</div></div>
+        <div class="stats-card"><div class="label">分享率</div><div class="value blue" id="s-ratio">-</div><div class="sub" id="s-ratio-sub">上传 / 下载</div></div>
+        <div class="stats-card"><div class="label">采样次数</div><div class="value cyan" id="s-samples">-</div><div class="sub" id="s-updated">-</div></div>
+        <div class="stats-card"><div class="label">任务峰值</div><div class="value" id="s-torrents">-</div><div class="sub" id="s-torrents-sub">-</div></div>
+        <div class="stats-card"><div class="label">Tracker 数</div><div class="value" id="s-trackers">-</div><div class="sub">有流量或任务的站点</div></div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stats-panel">
+          <div class="stats-panel-head">
+            <h3>状态时长（任务·秒）</h3>
+            <span class="meta" id="status-meta" title="任务·秒 = 处于该状态的任务数 × 采样间隔秒数，不是墙钟时间">任务数×间隔累计，非墙钟</span>
+          </div>
+          <div class="stats-panel-body">
+            <div class="status-bars" id="status-bars"></div>
+          </div>
+        </div>
+        <div class="stats-panel">
+          <div class="stats-panel-head">
+            <h3>速度统计</h3>
+            <span class="meta">全局传输速度</span>
+          </div>
+          <div class="stats-panel-body">
+            <div class="speed-metrics" id="speed-metrics"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-panel" style="margin-bottom:16px">
+        <div class="stats-panel-head">
+          <h3>近 14 日流量</h3>
+          <span class="meta">青=上传 · 橙=下载 · 点击切换日期</span>
+        </div>
+        <div class="stats-panel-body">
+          <div class="history-chart" id="history-chart"></div>
+        </div>
+      </div>
+
+      <div class="stats-panel">
+        <div class="stats-panel-head">
+          <h3>各 Tracker 明细</h3>
+          <span class="meta" id="tracker-meta">上传 / 下载 / 速度极值与均值 / 状态时长</span>
+        </div>
+        <div class="tracker-stats-wrap">
+          <table class="tracker-stats-table" id="tracker-stats-table">
+            <thead>
+              <tr>
+                <th>Tracker</th>
+                <th class="num">上传</th>
+                <th class="num">下载</th>
+                <th class="num">分享率</th>
+                <th class="num">上传均速</th>
+                <th class="num">上传峰值</th>
+                <th class="num">下载均速</th>
+                <th class="num">下载峰值</th>
+                <th class="num">任务均/峰</th>
+                <th class="num">做种时长</th>
+                <th class="num">下载时长</th>
+              </tr>
+            </thead>
+            <tbody id="tracker-stats-body">
+              <tr><td colspan="11" class="stats-empty">暂无数据，请保持服务运行以采集</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Add Modal -->
@@ -1856,14 +2218,21 @@ function updateCatSelect() {
 
 function setFilter(f) {
   filter = f;
+  if (typeof appView !== 'undefined' && appView !== 'torrents') {
+    setAppView('torrents');
+    return;
+  }
   document.querySelectorAll('.tab').forEach(b => {
     const map = {all:'全部',downloading:'下载',seeding:'做种',paused:'暂停',stalled:'卡住',error:'异常',completed:'完成'};
     b.classList.toggle('active', b.textContent === map[f]);
   });
-  document.querySelectorAll('.nav-item').forEach(b => {
+  document.querySelectorAll('.nav-item:not(.page-nav)').forEach(b => {
     const txt = b.textContent.trim();
     const map = {all:'全部种子',downloading:'正在下载',seeding:'正在做种',paused:'已暂停',stalled:'卡住',error:'异常',completed:'已完成'};
-    b.classList.toggle('active', txt.startsWith(map[f]));
+    b.classList.toggle('active', txt.startsWith(map[f] || ''));
+  });
+  document.querySelectorAll('.nav-item.page-nav').forEach(b => {
+    b.classList.toggle('active', b.id === 'nav-page-torrents');
   });
   render();
 }
@@ -2151,6 +2520,308 @@ function toggleTheme() {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('pt-qb-theme', theme);
 }
+
+/* --- App views & daily stats --- */
+let appView = 'torrents';
+let statsDate = '';
+let statsDays = [];
+let statsSummary = [];
+let statsLoading = false;
+
+const STATUS_LABELS = {
+  downloading: '下载',
+  seeding: '做种',
+  stalled_up: '卡住上传',
+  stalled_dl: '卡住下载',
+  paused: '暂停',
+  error: '异常',
+  checking: '校验',
+  other: '其他'
+};
+
+function setAppView(view) {
+  appView = view === 'stats' ? 'stats' : 'torrents';
+  const torrentsView = document.getElementById('view-torrents');
+  const statsView = document.getElementById('view-stats');
+  if (torrentsView) torrentsView.classList.toggle('view-hidden', appView !== 'torrents');
+  if (statsView) statsView.classList.toggle('view-hidden', appView !== 'stats');
+
+  document.querySelectorAll('.nav-item.page-nav').forEach((el) => {
+    const id = el.id || '';
+    el.classList.toggle('active', (appView === 'stats' && id === 'nav-page-stats') || (appView === 'torrents' && id === 'nav-page-torrents'));
+  });
+
+  if (appView === 'stats') {
+    document.querySelectorAll('.nav-item:not(.page-nav)').forEach((el) => el.classList.remove('active'));
+  } else {
+    setFilter(filter);
+  }
+
+  const title = document.querySelector('.page-header h1');
+  if (title) title.textContent = appView === 'stats' ? '每日数据统计' : '种子控制台';
+
+  if (appView === 'stats') {
+    void loadStatsPage(false);
+  }
+}
+
+function shiftDate(dateStr, deltaDays) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + deltaDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  if (sec < 60) return sec + 's';
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return d + '天' + (h ? h + '时' : '');
+  if (h > 0) return h + '时' + (m ? m + '分' : '');
+  return m + '分';
+}
+
+function fmtRatio(v) {
+  if (v === null || v === undefined) return '∞';
+  if (v === Infinity || v === 'Infinity') return '∞';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '∞';
+  return n.toFixed(2);
+}
+
+function fmtTimeShort(iso) {
+  if (!iso) return '-';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('zh-CN', { hour12: false });
+  } catch {
+    return iso;
+  }
+}
+
+function speedCell(s) {
+  s = s || {};
+  return {
+    avg: fmtSpeed(s.avg || 0),
+    max: fmtSpeed(s.max || 0),
+    min: fmtSpeed(s.min || 0),
+    activeAvg: fmtSpeed(s.activeAvg || 0),
+    activeMin: fmtSpeed(s.activeMin || 0)
+  };
+}
+
+let statsLoadSeq = 0;
+
+async function loadStatsPage(forceSample = false) {
+  const seq = ++statsLoadSeq;
+  statsLoading = true;
+  const hint = document.getElementById('stats-hint');
+  const requestedDate = statsDate;
+  try {
+    if (hint) hint.textContent = '加载中...';
+
+    const daysRes = await apiJson('/api/stats/days');
+    if (seq !== statsLoadSeq) return;
+    statsDays = daysRes.days || [];
+    // Prefer server timezone day key; avoid UTC fallback near midnight
+    const today = daysRes.today || statsDate || '';
+    if (!statsDate) statsDate = today;
+
+    const dateInput = document.getElementById('stats-date');
+    if (dateInput) {
+      dateInput.value = statsDate;
+      if (today) dateInput.max = today;
+    }
+
+    const qs = new URLSearchParams({ date: statsDate });
+    if (forceSample && today && statsDate === today) qs.set('sample', '1');
+    const [daily, summary] = await Promise.all([
+      apiJson('/api/stats/daily?' + qs.toString()),
+      apiJson('/api/stats/summary?limit=14')
+    ]);
+    if (seq !== statsLoadSeq) return;
+    // User switched date while in flight — ignore stale payload
+    if (requestedDate && statsDate && requestedDate !== statsDate && daily.date && daily.date !== statsDate) {
+      return;
+    }
+    statsSummary = (summary.days || []).slice().reverse();
+    renderStatsDaily(daily);
+    renderStatsHistory(statsSummary, statsDate);
+    if (hint) {
+      const intervalMin = Math.round((daysRes.sampleMs || 60000) / 60000);
+      hint.textContent = `采样间隔约 ${intervalMin || 1} 分钟 · 保留 ${daysRes.retentionDays || 90} 天 · 最后更新 ${fmtTimeShort(daily.updatedAt)}`;
+    }
+  } catch (e) {
+    if (seq !== statsLoadSeq) return;
+    if (hint) hint.textContent = e.message || '统计加载失败';
+    const body = document.getElementById('tracker-stats-body');
+    if (body) body.innerHTML = '<tr><td colspan="11" class="stats-empty">' + esc(e.message || '加载失败') + '</td></tr>';
+  } finally {
+    if (seq === statsLoadSeq) statsLoading = false;
+  }
+}
+
+function renderStatsDaily(data) {
+  const g = data.global || {};
+  document.getElementById('s-up').textContent = fmtBytes(g.uploaded || 0);
+  document.getElementById('s-dl').textContent = fmtBytes(g.downloaded || 0);
+  document.getElementById('s-ratio').textContent = fmtRatio(g.ratio);
+  document.getElementById('s-samples').textContent = String(data.sampleCount || 0);
+  document.getElementById('s-updated').textContent = '更新 ' + fmtTimeShort(data.updatedAt);
+  document.getElementById('s-torrents').textContent = String(Math.round(g.torrentCountMax || 0));
+  document.getElementById('s-torrents-sub').textContent = '日均 ' + (g.torrentCountAvg || 0).toFixed(1) + ' 个任务';
+  document.getElementById('s-trackers').textContent = String((data.trackers || []).length);
+  document.getElementById('s-up-sub').textContent = '峰值 ' + fmtSpeed((g.upSpeed || {}).max || 0);
+  document.getElementById('s-dl-sub').textContent = '峰值 ' + fmtSpeed((g.dlSpeed || {}).max || 0);
+  document.getElementById('s-ratio-sub').textContent = (g.downloaded > 0 || g.uploaded > 0) ? '基于当日流量' : '尚无流量';
+
+  const statusSecRaw = g.statusSeconds || {};
+  const statusSec = { ...statusSecRaw };
+  if (statusSec.stalled && !statusSec.stalled_up) {
+    statusSec.stalled_up = (statusSec.stalled_up || 0) + statusSec.stalled;
+  }
+  const statusAvg = g.statusAvg || {};
+  const totalSec = Object.keys(STATUS_LABELS).reduce((s, k) => s + (statusSec[k] || 0), 0);
+  const maxSec = Math.max(1, ...Object.keys(STATUS_LABELS).map((k) => statusSec[k] || 0));
+  const bars = document.getElementById('status-bars');
+  bars.innerHTML = Object.keys(STATUS_LABELS).map((k) => {
+    const sec = statusSec[k] || 0;
+    const pct = Math.max(0, Math.min(100, (sec / maxSec) * 100));
+    const avg = statusAvg[k] || 0;
+    return '<div class="status-row">'
+      + '<span class="name">' + STATUS_LABELS[k] + '</span>'
+      + '<div class="bar-track"><div class="bar-fill ' + k + '" style="width:' + pct.toFixed(1) + '%"></div></div>'
+      + '<span class="time" title="任务·秒 ' + Math.round(sec) + '；平均并发 ' + avg.toFixed(1) + ' 个任务">'
+      + fmtDuration(sec) + '<small style="opacity:.75"> ·' + avg.toFixed(1) + '</small></span>'
+      + '</div>';
+  }).join('');
+  document.getElementById('status-meta').textContent = totalSec
+    ? ('合计 ' + fmtDuration(totalSec) + ' 任务·秒（非墙钟）')
+    : '等待更多采样';
+  document.getElementById('status-meta').title =
+    '任务·秒 = Σ(该状态任务数 × 采样间隔)。例如 100 个做种 × 60 秒 = 6000 任务·秒。旁注为平均并发任务数。';
+
+  const dl = speedCell(g.dlSpeed);
+  const up = speedCell(g.upSpeed);
+  document.getElementById('speed-metrics').innerHTML = [
+    ['下载速度', dl],
+    ['上传速度', up]
+  ].map(([title, s]) => {
+    return '<div class="speed-box"><h4>' + title + '</h4>'
+      + '<div class="speed-kv"><span>平均</span><b>' + s.avg + '</b></div>'
+      + '<div class="speed-kv"><span>最大</span><b>' + s.max + '</b></div>'
+      + '<div class="speed-kv"><span>最小</span><b>' + s.min + '</b></div>'
+      + '<div class="speed-kv"><span>活跃均速</span><b>' + s.activeAvg + '</b></div>'
+      + '<div class="speed-kv"><span>活跃最小</span><b>' + s.activeMin + '</b></div>'
+      + '</div>';
+  }).join('');
+
+  const body = document.getElementById('tracker-stats-body');
+  const trackers = data.trackers || [];
+  if (!trackers.length) {
+    body.innerHTML = '<tr><td colspan="11" class="stats-empty">暂无 Tracker 明细。保持服务运行后会按采样累计。</td></tr>';
+    return;
+  }
+  body.innerHTML = trackers.map((t) => {
+    const color = trackerColorClassForHost(t.host);
+    const seedSec = (t.statusSeconds || {}).seeding || 0;
+    const dlSec = (t.statusSeconds || {}).downloading || 0;
+    return '<tr>'
+      + '<td class="host ' + color + '" title="' + esc(t.host) + '">' + esc(t.host) + '</td>'
+      + '<td class="num">' + fmtBytes(t.uploaded || 0) + '</td>'
+      + '<td class="num">' + fmtBytes(t.downloaded || 0) + '</td>'
+      + '<td class="num">' + fmtRatio(t.ratio) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).avg || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.upSpeed || {}).max || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).avg || 0) + '</td>'
+      + '<td class="num">' + fmtSpeed((t.dlSpeed || {}).max || 0) + '</td>'
+      + '<td class="num">' + (t.torrentCountAvg || 0).toFixed(1) + ' / ' + Math.round(t.torrentCountMax || 0) + '</td>'
+      + '<td class="num">' + fmtDuration(seedSec) + '</td>'
+      + '<td class="num">' + fmtDuration(dlSec) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function renderStatsHistory(days, activeDate) {
+  const box = document.getElementById('history-chart');
+  if (!days.length) {
+    box.innerHTML = '<div class="stats-empty" style="width:100%">暂无历史，今天开始采集后会出现柱状图</div>';
+    return;
+  }
+  const maxTraffic = Math.max(1, ...days.map((d) => (d.uploaded || 0) + (d.downloaded || 0)));
+  box.innerHTML = days.map((d) => {
+    const ulH = Math.max(2, ((d.uploaded || 0) / maxTraffic) * 100);
+    const dlH = Math.max(2, ((d.downloaded || 0) / maxTraffic) * 100);
+    const active = d.date === activeDate ? ' active' : '';
+    const title = d.date + ' 上传 ' + fmtBytes(d.uploaded || 0) + ' / 下载 ' + fmtBytes(d.downloaded || 0);
+    const md = String(d.date || '').slice(5);
+    return '<div class="history-bar' + active + '" data-date="' + esc(d.date) + '" title="' + esc(title) + '">'
+      + '<div class="bars">'
+      + '<div class="seg ul" style="height:' + ulH.toFixed(1) + '%"></div>'
+      + '<div class="seg dl" style="height:' + dlH.toFixed(1) + '%"></div>'
+      + '</div>'
+      + '<div class="date-label">' + esc(md) + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function bindStatsUi() {
+  const dateInput = document.getElementById('stats-date');
+  const prev = document.getElementById('stats-prev-day');
+  const next = document.getElementById('stats-next-day');
+  const todayBtn = document.getElementById('stats-today-btn');
+  const refreshBtn = document.getElementById('stats-refresh-btn');
+  const chart = document.getElementById('history-chart');
+
+  if (dateInput) {
+    dateInput.addEventListener('change', () => {
+      if (!dateInput.value) return;
+      statsDate = dateInput.value;
+      void loadStatsPage(false);
+    });
+  }
+  if (prev) prev.addEventListener('click', () => {
+    statsDate = shiftDate(statsDate || dateInput?.value, -1);
+    if (dateInput) dateInput.value = statsDate;
+    void loadStatsPage(false);
+  });
+  if (next) next.addEventListener('click', () => {
+    const today = dateInput?.max || new Date().toISOString().slice(0, 10);
+    const n = shiftDate(statsDate || dateInput?.value, 1);
+    statsDate = n > today ? today : n;
+    if (dateInput) dateInput.value = statsDate;
+    void loadStatsPage(false);
+  });
+  if (todayBtn) todayBtn.addEventListener('click', () => {
+    statsDate = dateInput?.max || new Date().toISOString().slice(0, 10);
+    if (dateInput) dateInput.value = statsDate;
+    void loadStatsPage(false);
+  });
+  if (refreshBtn) refreshBtn.addEventListener('click', async () => {
+    try {
+      await apiJson('/api/stats/sample', { method: 'POST', body: '{}' });
+      await loadStatsPage(false);
+    } catch (e) {
+      alert(e.message || '采样失败');
+    }
+  });
+  if (chart) {
+    chart.addEventListener('click', (ev) => {
+      const bar = ev.target.closest('[data-date]');
+      if (!bar) return;
+      statsDate = bar.getAttribute('data-date');
+      if (dateInput) dateInput.value = statsDate;
+      void loadStatsPage(false);
+    });
+  }
+}
+
+bindStatsUi();
+
 </script>
 </body>
 </html>
